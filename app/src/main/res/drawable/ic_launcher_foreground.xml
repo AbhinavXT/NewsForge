@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Three rising candlesticks on a baseline.
+
+  Geometry is constrained, not eyeballed. A launcher shows only the central 72dp of the
+  108dp canvas and masks that to an arbitrary shape, so everything here sits inside the
+  66dp safe circle — every corner is within radius 33 of (54,54), the furthest being the
+  baseline ends and the top of the third wick at ~31.8.
+
+  This same drawable is the monochrome layer for themed icons, where the system flattens
+  every path to one tint. The three candles therefore differ in height and position, never
+  only in colour, so the mark still reads once the colour is gone.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Baseline -->
+    <path
+        android:fillColor="#FF30363D"
+        android:pathData="M32,74h44v3h-44z" />
+
+    <!-- Candle 1 — flat, muted -->
+    <path
+        android:fillColor="#FF7D8590"
+        android:pathData="M33,49h3v25h-3z" />
+    <path
+        android:fillColor="#FF7D8590"
+        android:pathData="M28,56h13v14h-13z" />
+
+    <!-- Candle 2 — rising -->
+    <path
+        android:fillColor="#FF4C8DFF"
+        android:pathData="M52,41h3v30h-3z" />
+    <path
+        android:fillColor="#FF4C8DFF"
+        android:pathData="M47,47h13v19h-13z" />
+
+    <!-- Candle 3 — the breakout -->
+    <path
+        android:fillColor="#FF3FB950"
+        android:pathData="M71,31h3v36h-3z" />
+    <path
+        android:fillColor="#FF3FB950"
+        android:pathData="M66,37h13v25h-13z" />
+</vector>
