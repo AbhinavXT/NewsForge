@@ -29,3 +29,10 @@ val CatResults = Color(0xFF58A6FF)
 val CatPolicy = Color(0xFFD29922)
 val CatGlobal = Color(0xFF39C5CF)
 val CatNeutral = Color(0xFF6E7681)
+
+// Price moves. Green and red are what every terminal and broker app in the country uses,
+// so anything else would be actively confusing here — but the sign is always printed
+// alongside, because this is the one place in the app where red against green carries
+// meaning and the palette above deliberately avoids leaning on that pair.
+val QuoteUp = Color(0xFF3FB950)
+val QuoteDown = Color(0xFFE5534B)

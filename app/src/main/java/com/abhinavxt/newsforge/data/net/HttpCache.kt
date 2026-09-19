@@ -1,5 +1,8 @@
 package com.abhinavxt.newsforge.data.net
 
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
+
 /** Cache validators carried between polls of the same feed. */
 data class CacheValidators(
     val etag: String? = null,
@@ -55,7 +58,41 @@ object HttpCache {
             ?: previous?.lastModified,
     )
 
-    /** @return true when the declared body size is implausible for a feed. */
+    /**
+     * @return true when the declared body size is implausible for a feed.
+     *
+     * A cheap early exit only. `Content-Length` is a hint, and a chunked response omits
+     * it entirely, so this cannot be the limit — see [readBounded].
+     */
     fun isTooLarge(contentLength: Long?): Boolean =
         contentLength != null && contentLength > MAX_BODY_BYTES
+
+    /**
+     * Reads a response body into memory, refusing rather than truncating past [limit].
+     *
+     * The declared length check above only holds for well-behaved servers; anything
+     * chunked sails past it, and the bytes then go straight into a DOM parser. A feed URL
+     * that starts redirecting to a video, or a block page that streams, should fail the
+     * poll rather than take the process down with it.
+     *
+     * Truncating instead of refusing would be worse than either: a half-read feed parses
+     * as a short feed, and the missing items look like the publisher went quiet.
+     *
+     * @return the bytes, or null when the stream ran past [limit].
+     */
+    fun readBounded(stream: InputStream, limit: Long = MAX_BODY_BYTES): ByteArray? {
+        val out = ByteArrayOutputStream(DEFAULT_CHUNK_BYTES)
+        val chunk = ByteArray(DEFAULT_CHUNK_BYTES)
+        var total = 0L
+        while (true) {
+            val read = stream.read(chunk)
+            if (read < 0) break
+            total += read
+            if (total > limit) return null
+            out.write(chunk, 0, read)
+        }
+        return out.toByteArray()
+    }
+
+    private const val DEFAULT_CHUNK_BYTES = 16 * 1024
 }

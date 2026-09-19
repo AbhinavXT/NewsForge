@@ -35,11 +35,17 @@ class SyncWorker(
         val container = (applicationContext as NewsForgeApp).container
         val repository = container.repository
         return try {
+            // Before the refresh, so alerts are judged against current exposure rather
+            // than the last poll's. Still best-effort: a bridge failure must not fail
+            // the news sync, which is what `tolerate` is for.
+            syncDesk(container)
+            // Before the refresh: a company listed this week should be taggable in the
+            // articles this very sync is about to store, not in tomorrow's.
+            tolerate(TAG, "company list") { container.instrumentRepository.refresh() }
             val report = repository.refresh()
+            syncQuotes(container)
             postAlerts(container, report)
             postEventReminders(container)
-            // Best-effort and last: a bridge failure must not fail the news sync.
-            runCatching { container.deskRepository.sync() }
             Log.i(
                 TAG,
                 "sync: ${report.newArticles} new, ${report.failedFeeds.size} feeds failed, " +
@@ -83,16 +89,19 @@ class SyncWorker(
             candidates = candidates,
             watchlist = repository.watchlistSymbols(),
             alreadyNotified = repository.alreadyNotified(report.startedAt - DEDUPE_WINDOW_MS),
+            weights = repository.positionWeights(),
             settings = settings,
             nowMillis = report.finishedAt,
             firstRun = report.firstRun,
         )
         if (alerts.isEmpty()) return
 
-        container.notifier.post(alerts)
-        // Marked after posting, so a crash mid-post retries rather than silently
-        // swallowing the story.
-        repository.markNotified(alerts.map { it.candidate.clusterId })
+        // Marked after posting, and only for what posted. A crash or a refusal mid-batch
+        // then leaves the rest unmarked, so the next sync tries them again rather than
+        // recording as delivered a story nobody was ever shown.
+        val posted = container.notifier.post(alerts)
+        if (posted.isEmpty()) return
+        repository.markNotified(posted.map { it.candidate.clusterId })
     }
 
     /**
@@ -116,25 +125,20 @@ class SyncWorker(
             },
             tiers = repository.watchlistSymbols(),
             alreadyNotified = repository.alreadyNotified(
-                System.currentTimeMillis() - REMINDER_DEDUPE_WINDOW_MS
+                System.currentTimeMillis() - EventAlertPolicy.DEDUPE_WINDOW_MS
             ),
             settings = settings,
             nowMillis = System.currentTimeMillis(),
         )
         if (alerts.isEmpty()) return
 
-        container.notifier.postEvents(alerts)
-        repository.markNotified(alerts.map { it.key })
+        val posted = container.notifier.postEvents(alerts)
+        if (posted.isEmpty()) return
+        repository.markNotified(posted.map { it.key })
     }
 
     companion object {
         private const val TAG = "SyncWorker"
-
-        /**
-         * Wider than the news window: a leveraged three-day warning has to still be
-         * remembered when the one-day warning comes round, or it fires twice.
-         */
-        private const val REMINDER_DEDUPE_WINDOW_MS = 30L * 24 * 60 * 60 * 1000
 
         /** How far back to look for an existing alert on the same story. */
         private const val DEDUPE_WINDOW_MS = 48L * 60 * 60 * 1000

@@ -7,9 +7,12 @@ import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 
@@ -62,9 +65,18 @@ class FeedFetcher(private val client: OkHttpClient) {
         referer: String? = null,
         prime: Boolean = false,
         bearer: String? = null,
+        /**
+         * Sent as a plain-text POST body, which makes this a publish rather than a fetch.
+         *
+         * The one place the app writes to the network instead of reading from it. It goes
+         * through the same call path deliberately: the timeouts, the size guard and the
+         * error shape are all things a publish wants too, and a second client would have
+         * to reimplement them to be equally careful.
+         */
+        body: String? = null,
     ): FetchResult {
         if (prime) primeNse()
-        return request(url, validators, referer, bearer)
+        return request(url, validators, referer, bearer, body)
     }
 
     private suspend fun request(
@@ -72,6 +84,7 @@ class FeedFetcher(private val client: OkHttpClient) {
         validators: CacheValidators?,
         referer: String?,
         bearer: String? = null,
+        body: String? = null,
     ): FetchResult =
         suspendCancellableCoroutine { continuation ->
             val builder = Request.Builder()
@@ -91,19 +104,36 @@ class FeedFetcher(private val client: OkHttpClient) {
                 builder.header(name, value)
             }
 
+            if (body != null) builder.post(body.toRequestBody(TEXT_PLAIN))
+
             val call = client.newCall(builder.build())
             continuation.invokeOnCancellation { call.cancel() }
 
             call.enqueue(object : Callback {
                 override fun onFailure(call: Call, e: IOException) {
-                    if (call.isCanceled()) return
+                    // Keyed on the continuation rather than on `call.isCanceled()`: a call
+                    // cancelled by anything other than our own `invokeOnCancellation` would
+                    // otherwise return here without resuming, and nothing else would ever
+                    // complete this coroutine. Resuming a cancelled one is a no-op.
+                    if (!continuation.isActive) return
                     continuation.resume(
                         FetchResult.Failure(-1, e.message ?: e.javaClass.simpleName)
                     )
                 }
 
                 override fun onResponse(call: Call, response: Response) {
-                    continuation.resume(readResponse(response, validators))
+                    // Anything thrown here would land on an OkHttp dispatcher thread with
+                    // the continuation still suspended — the sync would hang until the
+                    // scope was cancelled, with no timeout to save it. A failed read is a
+                    // failed poll, which the caller already knows how to record.
+                    val result = try {
+                        readResponse(response, validators)
+                    } catch (e: Exception) {
+                        // The body is already closed: readResponse wraps everything in
+                        // `response.use`, whose finally runs on the way out.
+                        FetchResult.Failure(-1, e.message ?: e.javaClass.simpleName)
+                    }
+                    if (continuation.isActive) continuation.resume(result)
                 }
             })
         }
@@ -120,11 +150,14 @@ class FeedFetcher(private val client: OkHttpClient) {
             }
 
             val body = response.body ?: return FetchResult.Failure(response.code, "Empty body")
+            // Declared length first, so an honest server saves us the download entirely.
             if (HttpCache.isTooLarge(body.contentLength().takeIf { it >= 0 })) {
                 return FetchResult.Failure(response.code, "Body larger than the feed limit")
             }
             val bytes = try {
-                body.bytes()
+                // Then the real limit, because a chunked response declares nothing.
+                HttpCache.readBounded(body.byteStream())
+                    ?: return FetchResult.Failure(response.code, "Body larger than the feed limit")
             } catch (e: IOException) {
                 return FetchResult.Failure(response.code, e.message ?: "Read failed")
             }
@@ -150,6 +183,8 @@ class FeedFetcher(private val client: OkHttpClient) {
 
         const val NSE_HOME = "https://www.nseindia.com/"
 
+        private val TEXT_PLAIN = "text/plain; charset=utf-8".toMediaType()
+
         /**
          * In-memory cookie jar.
          *
@@ -158,14 +193,59 @@ class FeedFetcher(private val client: OkHttpClient) {
          * process primes once and re-primes when a call is rejected.
          */
         private class SessionCookies : CookieJar {
-            private val store = HashMap<String, List<Cookie>>()
+            /**
+             * Concurrent because it has to be: OkHttp calls a [CookieJar] from whichever
+             * dispatcher thread runs the call, and a refresh has several in flight.
+             */
+            private val store = ConcurrentHashMap<String, Map<String, Cookie>>()
 
+            /**
+             * Merged by name rather than replaced wholesale.
+             *
+             * NSE hands out its session across more than one response, so overwriting the
+             * host's list each time meant a later response carrying a single cookie
+             * silently dropped the ones priming had just collected — which shows up as a
+             * 401, or as an HTML block page served with a 200.
+             */
             override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
-                if (cookies.isNotEmpty()) store[url.host.substringAfter("www.")] = cookies
+                if (cookies.isEmpty()) return
+                store.compute(keyFor(url)) { _, held ->
+                    val merged = LinkedHashMap(held.orEmpty())
+                    for (cookie in cookies) merged[cookie.name] = cookie
+                    merged
+                }
             }
 
-            override fun loadForRequest(url: HttpUrl): List<Cookie> =
-                store[url.host.substringAfter("www.")].orEmpty()
+            override fun loadForRequest(url: HttpUrl): List<Cookie> {
+                val key = keyFor(url)
+                val held = store[key] ?: return emptyList()
+                val now = System.currentTimeMillis()
+                // An expired cookie is worse than none: it is accepted and then rejected
+                // downstream, which reads as a block rather than as a stale session.
+                val live = held.filterValues { it.expiresAt > now }
+                if (live.size != held.size) store[key] = live
+                // Each cookie still decides for itself whether it belongs on this
+                // request. The key groups a site's cookies; `matches` is what stops one
+                // scoped to a single host leaking across the rest of the domain.
+                return live.values.filter { it.matches(url) }
+            }
+
+            /**
+             * Keyed on the site, not the host.
+             *
+             * A session primed at www.nseindia.com has to be sent to
+             * nsearchives.nseindia.com, which serves the company list and gates on it
+             * exactly the same way. Stripping "www." only made those two different keys,
+             * so the archives request went out with no cookies at all and came back
+             * looking like a block.
+             *
+             * Last two labels is the registrable domain for every host this app talks to.
+             * It would over-group under a multi-part suffix like .co.in — and `matches`
+             * above is what keeps that from mattering, since a cookie scoped to one host
+             * is still refused on the others.
+             */
+            private fun keyFor(url: HttpUrl): String =
+                url.host.split('.').takeLast(2).joinToString(".")
         }
 
         fun defaultClient(): OkHttpClient = OkHttpClient.Builder()

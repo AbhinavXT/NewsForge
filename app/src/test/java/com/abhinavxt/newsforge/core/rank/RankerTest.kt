@@ -105,4 +105,67 @@ class RankerTest {
             1e-9,
         )
     }
+
+    @Test
+    fun theExplanationMultipliesBackToTheScore() {
+        // The whole point of showing the working: if the factors and the number disagree,
+        // the explanation is worse than nothing because it invites the wrong fix.
+        val input = RankInput(
+            category = Category.REGULATORY,
+            tier = SourceTier.OFFICIAL,
+            publishedAtMillis = now - 30 * 60_000,
+            symbolCount = 2,
+            clusterSize = 4,
+        )
+        val explanation = Ranker.explain(input, now, MarketPhase.OPEN)
+        assertEquals(
+            Ranker.score(input, now, MarketPhase.OPEN),
+            explanation.score,
+            1e-9,
+        )
+    }
+
+    @Test
+    fun aFactorThatDidNothingIsMarkedNeutral() {
+        // An untagged story should not have "Companies 1.00x" read as a contribution.
+        val explanation = Ranker.explain(
+            RankInput(Category.OTHER, SourceTier.WIRE, now, symbolCount = 0, clusterSize = 1),
+            now,
+            MarketPhase.OPEN,
+        )
+        val byName = explanation.factors.associateBy { it.name }
+        assertTrue(byName.getValue("Companies").isNeutral)
+        assertTrue(byName.getValue("Coverage").isNeutral)
+    }
+
+    @Test
+    fun theDominantFactorIsTheOneThatMovedItFurthest() {
+        // Two days old during a session: age should be the answer to "why is this low",
+        // not the category it happens to belong to.
+        val explanation = Ranker.explain(
+            RankInput(
+                category = Category.REGULATORY,
+                tier = SourceTier.OFFICIAL,
+                publishedAtMillis = now - 2 * 24 * 60 * 60_000L,
+                symbolCount = 1,
+                clusterSize = 2,
+            ),
+            now,
+            MarketPhase.OPEN,
+        )
+        assertEquals("Age", explanation.dominant?.name)
+    }
+
+    @Test
+    fun everyFactorIsNamedAndDescribed() {
+        // The row is only useful if it says what it is about; a blank detail would leave
+        // a multiplier with nothing to attach it to.
+        val explanation = Ranker.explain(
+            RankInput(Category.RESULTS, SourceTier.WIRE, now, 1, 3),
+            now,
+            MarketPhase.OPEN,
+        )
+        assertEquals(5, explanation.factors.size)
+        assertTrue(explanation.factors.all { it.name.isNotBlank() && it.detail.isNotBlank() })
+    }
 }

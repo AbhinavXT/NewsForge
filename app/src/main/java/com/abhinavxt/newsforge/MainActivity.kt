@@ -26,6 +26,7 @@ class MainActivity : ComponentActivity() {
      */
     /** Symbol from a tapped event reminder, consumed once by the composition. */
     private val pendingSymbol = mutableStateOf<String?>(null)
+    private val pendingDesk = mutableStateOf(false)
 
     private val requestNotifications =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* no-op */ }
@@ -41,11 +42,19 @@ class MainActivity : ComponentActivity() {
                 NewsForgeRoot(
                     repository = container.repository,
                     deskRepository = container.deskRepository,
+                    quoteRepository = container.quoteRepository,
+                    candleRepository = container.candleRepository,
+                    symbolDirectory = container.symbolDirectory,
+                    priceHistoryRepository = container.priceHistoryRepository,
+                    volumeHistoryRepository = container.volumeHistoryRepository,
+                    instrumentRepository = container.instrumentRepository,
                     alertPreferences = container.alertPreferences,
                     deskPreferences = container.deskPreferences,
                     watchPreferences = container.watchPreferences,
                     openSymbol = pendingSymbol.value,
                     onSymbolConsumed = { pendingSymbol.value = null },
+                    openDesk = pendingDesk.value,
+                    onDeskConsumed = { pendingDesk.value = false },
                 )
             }
         }
@@ -64,6 +73,12 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleAlertIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_OPEN_DESK, false) == true) {
+            // Consumed, so a rotation does not send the reader back to the desk tab
+            // after they have navigated away from it.
+            intent.removeExtra(EXTRA_OPEN_DESK)
+            pendingDesk.value = true
+        }
         intent?.getStringExtra(EXTRA_SYMBOL)?.let { symbol ->
             intent.removeExtra(EXTRA_SYMBOL)
             pendingSymbol.value = symbol
@@ -101,5 +116,8 @@ class MainActivity : ComponentActivity() {
         const val EXTRA_STORY_LINK = "story_link"
         const val EXTRA_STORY_CLUSTER = "story_cluster"
         const val EXTRA_SYMBOL = "symbol"
+
+        /** Set by a desk-signal notification: the message is not about an article. */
+        const val EXTRA_OPEN_DESK = "open_desk"
     }
 }

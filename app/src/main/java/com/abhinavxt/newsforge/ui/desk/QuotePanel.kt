@@ -19,10 +19,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.abhinavxt.newsforge.core.desk.DeskPayload
-import com.abhinavxt.newsforge.ui.theme.CatOrder
 import com.abhinavxt.newsforge.ui.theme.CatRegulatory
 import com.abhinavxt.newsforge.ui.theme.Chalk500
 import com.abhinavxt.newsforge.ui.theme.Ink600
+import com.abhinavxt.newsforge.ui.theme.QuoteDown
+import com.abhinavxt.newsforge.ui.theme.QuoteUp
 import java.util.Locale
 
 /**
@@ -35,10 +36,13 @@ import java.util.Locale
 @Composable
 fun QuotePanel(payload: DeskPayload, nowMillis: Long, modifier: Modifier = Modifier) {
     val change = payload.changePercent
+    // The same green and red the feed's ticker chips use. These were the category
+    // accents, which meant a falling price was drawn in the colour that means
+    // "regulatory" two rows above it.
     val changeColor = when {
         change == null -> MaterialTheme.colorScheme.onSurfaceVariant
-        change >= 0 -> CatOrder
-        else -> CatRegulatory
+        change >= 0 -> QuoteUp
+        else -> QuoteDown
     }
 
     Column(
@@ -63,12 +67,18 @@ fun QuotePanel(payload: DeskPayload, nowMillis: Long, modifier: Modifier = Modif
                 )
             }
             Spacer(Modifier.weight(1f))
-            // Age is stated, never implied. A price whose age is unknown or past the
-            // freshness window is labelled rather than quietly shown as current.
+            // Age and origin are stated, never implied. "live" on an exchange quote would
+            // be a lie — that data is delayed before it is published — and a price whose
+            // age is unknown is labelled rather than quietly shown as current.
+            val stale = payload.isStale(nowMillis)
             Text(
-                text = if (payload.isStale(nowMillis)) "stale" else "live",
+                text = when {
+                    stale -> "stale"
+                    payload.isDelayed -> "NSE · delayed"
+                    else -> "live"
+                },
                 style = MaterialTheme.typography.labelSmall,
-                color = if (payload.isStale(nowMillis)) CatRegulatory else Chalk500,
+                color = if (stale) CatRegulatory else Chalk500,
             )
         }
 

@@ -15,6 +15,16 @@ data class SymbolEntry(
     val aliases: List<String> = emptyList(),
     /** [com.abhinavxt.newsforge.core.tag.Sector] name, or null when unclassified. */
     val sector: String? = null,
+    /**
+     * True for entries imported in bulk rather than written by hand.
+     *
+     * The distinction earns its keep at exactly one place in the phrase table: a
+     * hand-written entry may claim a single common word, a bulk-imported one may not.
+     * Two hundred curated names can be checked; two thousand imported ones cannot, and
+     * among them sit Trent, Titan, Orient and Zen — every one of which is an ordinary
+     * English word that appears in market copy meaning nothing of the sort.
+     */
+    val generated: Boolean = false,
 )
 
 /**
@@ -46,6 +56,15 @@ class SymbolLexicon(entries: List<SymbolEntry>) {
                 // often to be worth the coverage they add.
                 if (tokens.size == 1 && key.length < 3) continue
                 if (tokens.size == 1 && key in AMBIGUOUS) continue
+                // A bulk-imported entry has to earn a single-token claim by being an
+                // improbable word. "symbiotec" is nobody's prose; "trent" is a river, a
+                // surname and a retailer, and only one of those is on the exchange.
+                // Length is a crude proxy for improbability and is the only one available
+                // without shipping an English dictionary — so it is set where the common
+                // false positives fall, and multi-token names are unaffected.
+                if (tokens.size == 1 && entry.generated && key.length < MIN_GENERATED_LENGTH) {
+                    continue
+                }
                 // First writer wins, so an earlier (larger, more likely) company keeps a
                 // shared alias instead of a later one silently stealing it.
                 table.putIfAbsent(key, entry.symbol)
@@ -93,6 +112,9 @@ class SymbolLexicon(entries: List<SymbolEntry>) {
          * Words that are real tickers somewhere but are far more often ordinary English
          * or market jargon in a headline.
          */
+        /** Shortest single token a bulk-imported entry may claim on its own. */
+        const val MIN_GENERATED_LENGTH = 6
+
         private val AMBIGUOUS = setOf(
             "india", "bank", "power", "steel", "gas", "oil", "auto", "motor", "motors",
             "cement", "port", "ports", "tata", "birla", "adani", "reliance", "group",

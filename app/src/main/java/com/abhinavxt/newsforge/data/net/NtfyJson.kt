@@ -1,9 +1,15 @@
 package com.abhinavxt.newsforge.data.net
 
+import com.abhinavxt.newsforge.core.desk.Candles
 import com.abhinavxt.newsforge.core.desk.DeskMessage
 import com.abhinavxt.newsforge.core.desk.DeskPayload
 import com.abhinavxt.newsforge.core.desk.DeskPayloads
 import com.abhinavxt.newsforge.core.desk.NtfyMessages
+import com.abhinavxt.newsforge.core.desk.PositionSnapshot
+import com.abhinavxt.newsforge.core.desk.PositionSnapshots
+import com.abhinavxt.newsforge.core.desk.ScreenResult
+import com.abhinavxt.newsforge.core.desk.ScreenResults
+import com.abhinavxt.newsforge.core.quote.CandleBatch
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -46,13 +52,52 @@ object NtfyJson {
      * `confluence.score` — so the contract itself stays in the pure layer and testable.
      * Returns null for ordinary prose, which is the overwhelming majority of messages.
      */
-    fun parsePayload(body: String): DeskPayload? {
+    fun parsePayload(body: String): DeskPayload? =
+        flatten(body)?.let { DeskPayloads.fromFlat(it) }
+
+    /**
+     * Every quote in a message body, whether it carried one or twenty.
+     *
+     * The single and batch schemas are tried in that order rather than branched on `kind`
+     * here, so the shape stays decided in the pure layer where it is tested.
+     */
+    fun parseQuotes(body: String): List<DeskPayload> {
+        val flat = flatten(body) ?: return emptyList()
+        DeskPayloads.fromFlat(flat)?.let { return listOf(it) }
+        return DeskPayloads.batchFromFlat(flat)
+    }
+
+    /** Flattens a payload body, or null when it is ordinary prose. */
+    private fun flatten(body: String): Map<String, String?>? {
         if (!DeskPayloads.looksLikePayload(body)) return null
         val root = runCatching { JSONObject(body) }.getOrNull() ?: return null
         val flat = HashMap<String, String?>()
         flatten(root, prefix = "", into = flat)
-        return DeskPayloads.fromFlat(flat)
+        return flat
     }
+
+    /**
+     * Reads an exposure snapshot out of a message body.
+     *
+     * Separate from [parsePayload] because the two schemas share a version marker and
+     * nothing else: a quote is about one symbol and a snapshot is about all of them, so
+     * there is no shape that could serve both without one of them carrying dead fields.
+     */
+    fun parsePositions(body: String): PositionSnapshot? =
+        flatten(body)?.let { PositionSnapshots.fromFlat(it) }
+
+    fun parseScreens(body: String): List<ScreenResult> =
+        flatten(body)?.let { ScreenResults.fromFlat(it) }.orEmpty()
+
+    /**
+     * Reads a run of price bars out of a message body.
+     *
+     * The bars themselves are one string field rather than a JSON array, because
+     * [flatten] skips arrays on purpose — see [Candles] for why that rule is worth
+     * keeping and why the string form is the one that fits the message limit anyway.
+     */
+    fun parseCandles(body: String): CandleBatch? =
+        flatten(body)?.let { Candles.fromFlat(it) }
 
     private fun flatten(obj: JSONObject, prefix: String, into: MutableMap<String, String?>) {
         for (key in obj.keys()) {

@@ -1,5 +1,6 @@
 package com.abhinavxt.newsforge.data.model
 
+import com.abhinavxt.newsforge.core.feed.FeedKind
 import com.abhinavxt.newsforge.core.model.Category
 import com.abhinavxt.newsforge.core.model.SourceTier
 
@@ -20,6 +21,8 @@ data class NewArticle(
     val sourceName: String,
     val category: Category,
     val tier: SourceTier,
+    /** Carried from the feed so the row can be rendered as a filing without a join. */
+    val feedKind: FeedKind = FeedKind.RSS,
     val publishedAt: Long,
     val fetchedAt: Long,
     val hadPublishedDate: Boolean,
@@ -38,6 +41,8 @@ data class ArticleSummary(
     val sourceName: String,
     val category: Category,
     val tier: SourceTier,
+    /** The kind of feed this came from, which decides whether it renders as a filing. */
+    val feedKind: FeedKind = FeedKind.RSS,
     val publishedAt: Long,
     val symbols: List<String>,
     val sectors: List<String> = emptyList(),

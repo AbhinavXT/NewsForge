@@ -87,6 +87,11 @@ object NotificationPolicy {
      *   inserts hundreds of articles at once, and alerting on those would mean installing
      *   the app and immediately being buried.
      */
+    /**
+     * @param weights portfolio share per symbol, where known. Shifts the tier a story is
+     *   judged at — see [PositionWeight] — so a large position is heard from sooner and a
+     *   token one stops contributing most of the notifications you learn to ignore.
+     */
     fun select(
         candidates: List<AlertCandidate>,
         watchlist: Map<String, WatchTier>,
@@ -94,6 +99,10 @@ object NotificationPolicy {
         settings: AlertSettings,
         nowMillis: Long,
         firstRun: Boolean,
+        // Last, and defaulted, so every existing positional caller keeps working. A
+        // parameter added in the middle of a list this long is a silent argument shuffle
+        // in anything that does not name them.
+        weights: Map<String, Double> = emptyMap(),
     ): List<Alert> {
         if (!settings.enabled) return emptyList()
         if (firstRun) return emptyList()
@@ -107,7 +116,12 @@ object NotificationPolicy {
             .asSequence()
             .filter { ageMinutes(it.publishedAt, nowMillis) <= settings.maxAgeMinutes }
             .map { candidate ->
-                val tier = WatchTier.strongest(candidate.symbols, watchlist)
+                val tier = WatchTier.strongest(candidate.symbols, watchlist)?.let { held ->
+                    PositionWeight.effectiveTier(
+                        held,
+                        PositionWeight.strongestWeight(candidate.symbols, watchlist, weights),
+                    )
+                }
                 val score = Ranker.score(
                     RankInput(
                         category = candidate.category,
@@ -159,7 +173,7 @@ object NotificationPolicy {
      * at 02:00 that could not equally be done at 06:30, so waking someone would be cost
      * without benefit.
      */
-    internal fun isQuiet(nowMillis: Long, settings: AlertSettings): Boolean {
+    fun isQuiet(nowMillis: Long, settings: AlertSettings): Boolean {
         val time = ZonedDateTime
             .ofInstant(Instant.ofEpochMilli(nowMillis), MarketClock.ZONE)
             .toLocalTime()

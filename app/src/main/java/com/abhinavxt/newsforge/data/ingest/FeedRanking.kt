@@ -54,6 +54,19 @@ object FeedRanking {
         val since = MarketClock.lastCloseMillis(nowMillis)
         return rank(items.filter { it.publishedAt >= since }, nowMillis)
     }
+
+    /**
+     * The same brief, taken from a list that has already been ranked.
+     *
+     * Equivalent to [overnight]: a score depends only on the article, never on the set it
+     * sits in, so filtering after ranking yields the same rows in the same order. This
+     * form exists so the feed can hold one database subscription instead of two — the
+     * brief is a view of the live list, not a second query for the same rows.
+     */
+    fun overnightOf(ranked: List<ScoredArticle>, nowMillis: Long): List<ScoredArticle> {
+        val since = MarketClock.lastCloseMillis(nowMillis)
+        return ranked.filter { it.article.publishedAt >= since }
+    }
 }
 
 /** How long articles live locally. */
@@ -71,6 +84,16 @@ object Retention {
      */
     const val FOLLOWED_KEEP_DAYS: Int = 90
 
+    /**
+     * Alert bookkeeping outlives the articles it refers to.
+     *
+     * These rows are an id and a timestamp, so a month of them costs nothing, and the
+     * event reminders dedupe over thirty days. Pruning them on [KEEP_DAYS] with the
+     * articles quietly cut that window to seven — long enough that the three-day lead
+     * still worked, short enough that the intent behind it did not.
+     */
+    const val NOTIFIED_KEEP_DAYS: Int = 31
+
     private const val DAY_MS = 24L * 60 * 60 * 1000
 
     /** Articles published before this are prunable. Saved and followed ones are exempt. */
@@ -78,6 +101,9 @@ object Retention {
 
     /** The hard floor: past this, even a followed company's coverage goes. */
     fun followedCutoffMillis(nowMillis: Long): Long = nowMillis - FOLLOWED_KEEP_DAYS * DAY_MS
+
+    /** Alerts marked as sent before this are prunable. */
+    fun notifiedCutoffMillis(nowMillis: Long): Long = nowMillis - NOTIFIED_KEEP_DAYS * DAY_MS
 
     /**
      * Window the clusterer compares against on insert.

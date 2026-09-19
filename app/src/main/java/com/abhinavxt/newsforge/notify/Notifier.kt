@@ -15,6 +15,7 @@ import androidx.core.content.ContextCompat
 import com.abhinavxt.newsforge.MainActivity
 import com.abhinavxt.newsforge.R
 import com.abhinavxt.newsforge.core.notify.Alert
+import com.abhinavxt.newsforge.core.desk.DeskMessage
 import com.abhinavxt.newsforge.core.notify.AlertLevel
 import com.abhinavxt.newsforge.core.notify.EventAlert
 
@@ -40,6 +41,15 @@ class Notifier(private val context: Context) {
         )
         manager.createNotificationChannel(
             NotificationChannel(
+                CHANNEL_DESK,
+                "Desk signals",
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply {
+                description = "Urgent messages pushed from TickerForge"
+            }
+        )
+        manager.createNotificationChannel(
+            NotificationChannel(
                 CHANNEL_NORMAL,
                 "Market-wide",
                 NotificationManager.IMPORTANCE_DEFAULT,
@@ -49,14 +59,24 @@ class Notifier(private val context: Context) {
         )
     }
 
-    fun post(alerts: List<Alert>) {
-        if (alerts.isEmpty()) return
+    /**
+     * @return the alerts that actually reached the shade.
+     *
+     * Reported rather than assumed, because the caller marks what it posts as notified
+     * and must not mark what it did not. A refusal partway through the loop used to end
+     * the method while the caller went on to record every alert in the batch — so the
+     * stories after the failing one were suppressed permanently, having never been shown
+     * once.
+     */
+    fun post(alerts: List<Alert>): List<Alert> {
+        if (alerts.isEmpty()) return emptyList()
         if (!canPost()) {
             Log.i(TAG, "Notification permission not granted; dropping ${alerts.size} alerts")
-            return
+            return emptyList()
         }
         ensureChannels()
         val manager = NotificationManagerCompat.from(context)
+        val posted = ArrayList<Alert>(alerts.size)
 
         for (alert in alerts) {
             val article = alert.candidate
@@ -94,20 +114,15 @@ class Notifier(private val context: Context) {
                 // The id is derived from the cluster so a repeat for the same story would
                 // replace rather than stack, even if the dedupe table were somehow missed.
                 manager.notify(article.clusterId.hashCode(), notification)
+                posted += alert
             } catch (e: SecurityException) {
                 Log.w(TAG, "Notification refused", e)
-                return
+                return posted
             }
         }
+        return posted
     }
 
-    /**
-     * Routes through [MainActivity] rather than firing ACTION_VIEW directly.
-     *
-     * Two reasons: the app opens the link in Custom Tabs, matching what tapping the same
-     * story in the feed does, and it can mark the story read — a story you read from a
-     * notification should not still be bold in the list afterwards.
-     */
     /**
      * Posts reminders for scheduled events.
      *
@@ -115,14 +130,15 @@ class Notifier(private val context: Context) {
      * cluster to mark read. Tapping one opens the company's timeline, which is where the
      * date, the exposure and the coverage all sit together.
      */
-    fun postEvents(alerts: List<EventAlert>) {
-        if (alerts.isEmpty()) return
+    fun postEvents(alerts: List<EventAlert>): List<EventAlert> {
+        if (alerts.isEmpty()) return emptyList()
         if (!canPost()) {
             Log.i(TAG, "Notification permission not granted; dropping ${alerts.size} reminders")
-            return
+            return emptyList()
         }
         ensureChannels()
         val manager = NotificationManagerCompat.from(context)
+        val posted = ArrayList<EventAlert>(alerts.size)
 
         for (alert in alerts) {
             val channel = when (alert.level) {
@@ -140,11 +156,68 @@ class Notifier(private val context: Context) {
                 .build()
             try {
                 manager.notify(alert.key.hashCode(), notification)
+                posted += alert
             } catch (e: SecurityException) {
                 Log.w(TAG, "Reminder refused", e)
-                return
+                return posted
             }
         }
+        return posted
+    }
+
+    /**
+     * Announces a signal the desk marked urgent.
+     *
+     * Its own channel, so it can be silenced without silencing the news and vice versa.
+     * They are different kinds of interruption from different senders, and a reader who
+     * wants trade signals at high volume may well not want every regulatory headline.
+     */
+    fun postDesk(messages: List<DeskMessage>): List<DeskMessage> {
+        if (messages.isEmpty()) return emptyList()
+        if (!canPost()) {
+            Log.i(TAG, "Notification permission not granted; dropping ${messages.size} signals")
+            return emptyList()
+        }
+        ensureChannels()
+        val manager = NotificationManagerCompat.from(context)
+        val posted = ArrayList<DeskMessage>(messages.size)
+
+        for (message in messages) {
+            val notification = NotificationCompat.Builder(context, CHANNEL_DESK)
+                .setSmallIcon(R.drawable.ic_stat_newsforge)
+                .setContentTitle(message.title?.takeIf { it.isNotBlank() } ?: "Desk")
+                .setContentText(message.summary)
+                // The body is often several lines of a signal; collapsing it to one
+                // would hide the part that decides whether to act.
+                .setStyle(NotificationCompat.BigTextStyle().bigText(message.body))
+                .setContentIntent(deskIntent(message.id))
+                .setAutoCancel(true)
+                .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+                .setGroup(GROUP_DESK)
+                .build()
+            try {
+                manager.notify(message.id.hashCode(), notification)
+                posted += message
+            } catch (e: SecurityException) {
+                Log.w(TAG, "Signal refused", e)
+                return posted
+            }
+        }
+        return posted
+    }
+
+    /** Opens the desk log rather than a story: the message is not about an article. */
+    private fun deskIntent(requestKey: String): PendingIntent {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            putExtra(MainActivity.EXTRA_OPEN_DESK, true)
+            addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        }
+        return PendingIntent.getActivity(
+            context,
+            requestKey.hashCode(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
     }
 
     private fun symbolIntent(symbol: String, requestKey: String): PendingIntent {
@@ -160,6 +233,13 @@ class Notifier(private val context: Context) {
         )
     }
 
+    /**
+     * Routes through [MainActivity] rather than firing ACTION_VIEW directly.
+     *
+     * Two reasons: the app opens the link in Custom Tabs, matching what tapping the same
+     * story in the feed does, and it can mark the story read — a story you read from a
+     * notification should not still be bold in the list afterwards.
+     */
     private fun openIntent(url: String, clusterId: String, requestKey: String): PendingIntent {
         val intent = Intent(context, MainActivity::class.java).apply {
             action = Intent.ACTION_VIEW
@@ -194,6 +274,8 @@ class Notifier(private val context: Context) {
         private const val TAG = "Notifier"
         const val CHANNEL_HIGH = "alerts_high"
         const val CHANNEL_NORMAL = "alerts_normal"
+        const val CHANNEL_DESK = "alerts_desk"
         private const val GROUP_KEY = "newsforge_alerts"
+        private const val GROUP_DESK = "newsforge_desk"
     }
 }

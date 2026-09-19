@@ -55,7 +55,7 @@ object Ingest {
             id = idFor(canonicalUrl),
             feedId = feed.id,
             title = item.title,
-            summary = item.summary,
+            summary = item.summary?.take(MAX_SUMMARY_CHARS),
             link = item.link,
             canonicalUrl = canonicalUrl,
             // Prefer the outlet named inside the entry over the feed we happened to poll:
@@ -63,6 +63,7 @@ object Ingest {
             sourceName = item.sourceName?.takeIf { it.isNotBlank() } ?: feed.name,
             category = Categorizer.categorize(item.title, item.summary, feed.categoryHint),
             tier = feed.tier,
+            feedKind = feed.kind,
             publishedAt = published,
             fetchedAt = fetchedAtMillis,
             hadPublishedDate = item.publishedAtMillis != null,
@@ -89,6 +90,19 @@ object Ingest {
      * publishing; keying on the title would fork one article into several rows over the
      * course of a morning.
      */
+    /**
+     * Longest summary stored.
+     *
+     * Feeds put entire articles in the description field, and a few hundred of those in
+     * one query is megabytes moving through a two-megabyte cursor window — which is not a
+     * gradual slowdown but a hard read failure partway down the list.
+     *
+     * Comfortably above what any screen renders: the card shows two lines and the sheet
+     * truncates at 320 characters, so this keeps a margin for the sheet without keeping
+     * the article. Anything longer is what Open is for.
+     */
+    const val MAX_SUMMARY_CHARS = 600
+
     fun idFor(canonicalUrl: String): String {
         val digest = MessageDigest.getInstance("SHA-256")
             .digest(canonicalUrl.toByteArray(Charsets.UTF_8))

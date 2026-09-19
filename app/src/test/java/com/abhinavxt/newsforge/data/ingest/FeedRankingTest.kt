@@ -2,6 +2,7 @@ package com.abhinavxt.newsforge.data.ingest
 
 import com.abhinavxt.newsforge.core.model.Category
 import com.abhinavxt.newsforge.core.model.SourceTier
+import com.abhinavxt.newsforge.core.notify.EventAlertPolicy
 import com.abhinavxt.newsforge.data.model.ArticleSummary
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -86,6 +87,23 @@ class FeedRankingTest {
     }
 
     @Test
+    fun theBriefIsTheSameWhetherTakenBeforeOrAfterRanking() {
+        // The feed holds one subscription and derives the brief from the ranked live
+        // list. That is only sound because a score depends on the article alone, never
+        // on the set it sits in — if that ever stops being true, this fails.
+        val morning = ist("2026-09-09T08:30:00")
+        val items = listOf(
+            summary("beforeClose", publishedAt = ist("2026-09-08T14:00:00")),
+            summary("afterClose", Category.ORDER_WIN, ist("2026-09-08T19:00:00")),
+            summary("earlyToday", Category.RESULTS, ist("2026-09-09T07:00:00"), symbols = listOf("INFY")),
+        )
+        assertEquals(
+            FeedRanking.overnight(items, morning),
+            FeedRanking.overnightOf(FeedRanking.rank(items, morning), morning),
+        )
+    }
+
+    @Test
     fun emptyInputRanksToEmpty() {
         assertEquals(emptyList<Any>(), FeedRanking.rank(emptyList(), midSession))
         assertEquals(emptyList<Any>(), FeedRanking.overnight(emptyList(), midSession))
@@ -100,6 +118,16 @@ class RetentionTest {
     @Test
     fun cutoffIsSevenDaysBack() {
         assertEquals(now - 7 * day, Retention.cutoffMillis(now))
+    }
+
+    @Test
+    fun notifiedRowsOutliveTheEventDedupeWindow() {
+        // They used to be pruned on the article cutoff, which silently capped a thirty-day
+        // dedupe window at seven. If the policy window ever grows past retention, the same
+        // event starts announcing itself twice.
+        val kept = now - Retention.notifiedCutoffMillis(now)
+        assertTrue(kept > EventAlertPolicy.DEDUPE_WINDOW_MS)
+        assertTrue(kept > now - Retention.cutoffMillis(now))
     }
 
     @Test

@@ -48,10 +48,18 @@ data class FeedFilter(
     val query: String = "",
     val symbol: String? = null,
     val sector: com.abhinavxt.newsforge.core.tag.Sector? = null,
+    /**
+     * A named screen from the desk, or null for no such narrowing.
+     *
+     * Its own axis rather than a reuse of [symbol]: a screen is a set of companies, and
+     * collapsing it to one would ask the reader to pick which of twelve names they meant
+     * before they had seen any of the news.
+     */
+    val screen: String? = null,
 ) {
     val isNarrowed: Boolean
         get() = group != null || watchlistOnly || unreadOnly || savedOnly ||
-            query.isNotBlank() || symbol != null || sector != null
+            query.isNotBlank() || symbol != null || sector != null || screen != null
 }
 
 object FeedFiltering {
@@ -67,18 +75,45 @@ object FeedFiltering {
         filter: FeedFilter,
         watchlist: Set<String> = emptySet(),
         mutes: List<MuteRule> = emptyList(),
-    ): List<ScoredArticle> =
-        items.filter { scored ->
+    ): List<ScoredArticle> = applyFilter(applyMutes(items, mutes), filter, watchlist)
+
+    /**
+     * The mute pass on its own.
+     *
+     * Split out because the feed needs its result twice per emission — as the input to
+     * the active filter, and as the population the chip counts are taken from. Running
+     * the full predicate chain twice to get there was the most expensive thing the feed
+     * did on every database change, and the second pass discarded all but the counts.
+     *
+     * A mute is checked before anything else and unconditionally: it is not a view, it
+     * is a standing instruction, and it holds whatever chip is active.
+     */
+    fun applyMutes(items: List<ScoredArticle>, mutes: List<MuteRule>): List<ScoredArticle> {
+        if (mutes.isEmpty()) return items
+        return items.filterNot { scored ->
+            val article = scored.article
+            MuteRules.isMuted(
+                article.sourceName,
+                article.title + " " + article.summary.orEmpty(),
+                article.symbols,
+                mutes,
+            )
+        }
+    }
+
+    /** Everything except muting, which [applyMutes] is assumed to have already done. */
+    fun applyFilter(
+        items: List<ScoredArticle>,
+        filter: FeedFilter,
+        watchlist: Set<String> = emptySet(),
+        /** Symbols of the screen named by [FeedFilter.screen], if one is selected. */
+        screenSymbols: Set<String> = emptySet(),
+    ): List<ScoredArticle> {
+        if (!filter.isNarrowed) return items
+        return items.filter { scored ->
             val article = scored.article
             when {
-                // Checked first and unconditionally: a mute is not a view, it is a
-                // standing instruction, and it should hold whatever chip is active.
-                mutes.isNotEmpty() && MuteRules.isMuted(
-                    article.sourceName,
-                    article.title + " " + article.summary.orEmpty(),
-                    article.symbols,
-                    mutes,
-                ) -> false
+                filter.screen != null && article.symbols.none { it in screenSymbols } -> false
                 filter.group != null && article.category.group != filter.group -> false
                 filter.symbol != null && filter.symbol !in article.symbols -> false
                 filter.sector != null && filter.sector.name !in article.sectors -> false
@@ -89,6 +124,7 @@ object FeedFiltering {
                 else -> true
             }
         }
+    }
 
     /**
      * With an empty watchlist the chip falls back to "any recognised company".

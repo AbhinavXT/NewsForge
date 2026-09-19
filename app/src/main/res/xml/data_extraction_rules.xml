@@ -1,19 +1,21 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    API 31 and above. Kept in step with backup_rules.xml, which covers API 30.
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
+        <!--
+            The ntfy access token. Off-device backup is the part worth avoiding: it
+            leaves a working credential sitting in a Drive archive long after the topic
+            it belongs to has been forgotten.
         -->
+        <exclude domain="sharedpref" path="desk.xml"/>
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <!--
+            Nothing excluded. This is the same person moving to a new handset with the
+            old one in their hand, and carrying the desk credentials across is the point
+            of the transfer rather than a leak.
+        -->
     </device-transfer>
-    -->
 </data-extraction-rules>

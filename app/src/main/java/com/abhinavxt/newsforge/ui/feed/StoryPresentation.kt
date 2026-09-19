@@ -2,6 +2,8 @@ package com.abhinavxt.newsforge.ui.feed
 
 import com.abhinavxt.newsforge.core.dedupe.Headline
 import com.abhinavxt.newsforge.data.model.ArticleSummary
+import java.util.Locale
+import kotlin.math.abs
 
 /**
  * Shapes a stored article for the detail sheet.
@@ -66,4 +68,31 @@ object StoryPresentation {
     /** Plain text for a share intent: headline, outlet, link. */
     fun shareText(article: ArticleSummary): String =
         "${article.title}\n${article.sourceName}\n${article.link}"
+
+    /**
+     * A price move, beside a ticker.
+     *
+     * Always signed and always to one decimal, so a column of them lines up under the
+     * monospace face the tickers use — "+1.4%" and "-12.0%" occupy predictable widths and
+     * the eye can run down them. Dropping the decimal above ten would save a character
+     * and cost that.
+     *
+     * The sign is printed rather than left to colour. Green against red is what every
+     * broker app in the country uses and anything else here would be perverse, but it is
+     * also the one pair the rest of this palette deliberately avoids relying on, so the
+     * direction has to survive being read by someone who cannot separate them.
+     */
+    fun changeLabel(changePercent: Double): String {
+        // The magnitude is formatted first and the sign decided from the result, so a
+        // move of -0.04 prints as "0.0%" rather than "-0.0%" — which reads as a fall that
+        // did not happen. Rounding after choosing the sign would also make the two
+        // decisions disagree at exactly the values where it matters.
+        val magnitude = String.format(Locale.US, "%.1f", abs(changePercent))
+        val sign = when {
+            magnitude == "0.0" -> ""
+            changePercent < 0 -> "-"
+            else -> "+"
+        }
+        return "$sign$magnitude%"
+    }
 }

@@ -65,11 +65,35 @@ object BriefBuilder {
         val watchlistStories = stories.filter { scored ->
             watchlist.isNotEmpty() && scored.article.symbols.any { it in watchlist }
         }
+
+        return Brief(
+            sinceMillis = sinceMillis,
+            totalStories = stories.size,
+            watchlistCount = watchlistStories.size,
+            sections = sections(stories, watchlist, limit, expanded),
+        )
+    }
+
+    /**
+     * The grouping on its own, without the brief's header counts.
+     *
+     * Split out for [FeedLayout], which needs the same sections over the live list. The
+     * ordering and the one-story-one-section rule are the interesting parts and should
+     * not be reimplemented per screen.
+     */
+    fun sections(
+        stories: List<ScoredArticle>,
+        watchlist: Set<String>,
+        limit: Int = SECTION_LIMIT,
+        expanded: Set<String> = emptySet(),
+    ): List<BriefSection> {
+        val watchlistStories = stories.filter { scored ->
+            watchlist.isNotEmpty() && scored.article.symbols.any { it in watchlist }
+        }
         val watchlistIds = watchlistStories.mapTo(HashSet()) { it.article.id }
         val rest = stories.filterNot { it.article.id in watchlistIds }
 
         val sections = ArrayList<BriefSection>(GROUP_ORDER.size + 1)
-
         if (watchlistStories.isNotEmpty()) {
             sections += section(KEY_WATCHLIST, "Your watchlist", watchlistStories, limit, expanded)
         }
@@ -78,13 +102,7 @@ object BriefBuilder {
             if (inGroup.isEmpty()) continue
             sections += section(group.name, group.label, inGroup, limit, expanded)
         }
-
-        return Brief(
-            sinceMillis = sinceMillis,
-            totalStories = stories.size,
-            watchlistCount = watchlistStories.size,
-            sections = sections,
-        )
+        return sections
     }
 
     private fun section(

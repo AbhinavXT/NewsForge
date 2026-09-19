@@ -45,6 +45,16 @@ data class EventAlert(
 object EventAlertPolicy {
 
     /**
+     * How far back to look for an alert already sent about the same event and lead.
+     *
+     * Wider than the news window, and wider than the longest lead in [leadsFor]: a
+     * leveraged three-day warning has to still be remembered when the one-day warning
+     * comes round, or the same date is announced twice. Storage has to outlive this —
+     * see `Retention.NOTIFIED_KEEP_DAYS`, which is what actually bounds it.
+     */
+    const val DEDUPE_WINDOW_MS: Long = 30L * 24 * 60 * 60 * 1000
+
+    /**
      * Days ahead at which each tier gets warned.
      *
      * A leveraged position wants time to reduce, which means more than one night's notice.

@@ -74,7 +74,8 @@ class MarketScheduleTest {
             MarketSchedule.sessionEndMillis(ist("2026-09-11T18:00:00")),
         )
         assertEquals(
-            ist("2026-09-09T15:45:00"),
+            // Inside the morning segment, so its end — not the end of the whole day.
+            ist("2026-09-09T12:00:00"),
             MarketSchedule.sessionEndMillis(ist("2026-09-09T11:00:00")),
         )
     }
@@ -86,6 +87,40 @@ class MarketScheduleTest {
             val now = ist(String.format("2026-09-11T%02d:30:00", hour))
             assertTrue(MarketSchedule.millisUntilNextSession(now) >= 0)
         }
+    }
+
+    @Test
+    fun theMiddayGapIsOutsideTheWatchAndResolvesToTheAfternoon() {
+        // The lunch lull is dropped so the day fits inside Android's foreground-service
+        // budget. Dropping it must send the worker to 13:30 today, not 09:00 tomorrow.
+        assertFalse(MarketSchedule.isSessionActive(ist("2026-09-09T12:00:00")))
+        assertFalse(MarketSchedule.isSessionActive(ist("2026-09-09T12:45:00")))
+        assertTrue(MarketSchedule.isSessionActive(ist("2026-09-09T13:30:00")))
+        assertEquals(
+            ist("2026-09-09T13:30:00"),
+            MarketSchedule.nextSessionStartMillis(ist("2026-09-09T12:45:00")),
+        )
+    }
+
+    @Test
+    fun theScheduleFitsInsideTheForegroundServiceBudget() {
+        // The one test standing between an edit to SEGMENTS and the system killing the
+        // watch mid-afternoon. Headroom on purpose: the cap counts time the service was
+        // actually up, and a restart after a crash spends more than the schedule implies.
+        assertTrue(MarketSchedule.scheduledMinutes < MarketSchedule.FOREGROUND_BUDGET_MINUTES)
+        assertTrue(MarketSchedule.scheduledMinutes <= MarketSchedule.FOREGROUND_BUDGET_MINUTES - 30)
+    }
+
+    @Test
+    fun segmentsAreOrderedAndDoNotOverlap() {
+        // nextSessionStartMillis returns the first future start it finds, so an
+        // out-of-order list would silently resolve to the wrong one.
+        val segments = MarketSchedule.SEGMENTS
+        assertTrue(segments.isNotEmpty())
+        for (i in 1 until segments.size) {
+            assertTrue(segments[i - 1].end <= segments[i].start)
+        }
+        for (segment in segments) assertTrue(segment.start < segment.end)
     }
 
     @Test

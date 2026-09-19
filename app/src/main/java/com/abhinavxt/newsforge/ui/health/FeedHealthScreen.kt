@@ -5,6 +5,9 @@
 
 package com.abhinavxt.newsforge.ui.health
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -34,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.abhinavxt.newsforge.core.backup.FeedBackup
 import com.abhinavxt.newsforge.core.feed.FeedKind
 import com.abhinavxt.newsforge.core.mute.AlertSensitivity
 import com.abhinavxt.newsforge.core.mute.MuteRule
@@ -63,10 +67,28 @@ fun FeedHealthScreen(
     onResetFeed: (String) -> Unit,
     onTestFeed: (String, FeedKind) -> Unit,
     onClearTest: () -> Unit,
+    onExportTo: (Uri) -> Unit,
+    onImportFrom: (Uri) -> Unit,
+    onClearBackupMessage: () -> Unit,
+    onRefreshCompanyList: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var editing by remember { mutableStateOf<FeedEntity?>(null) }
     var adding by remember { mutableStateOf(false) }
+
+    // The document picker rather than a path of our own: no storage permission to ask
+    // for, the file lands wherever the person actually keeps things — Drive, Files, an
+    // SD card — and restoring works across a reinstall, which writing into app storage
+    // would not.
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument(FeedBackup.MIME_TYPE)
+    ) { uri -> uri?.let(onExportTo) }
+    val importLauncher = rememberLauncherForActivityResult(
+        // Widened past our own MIME type on purpose: providers hand back
+        // `application/octet-stream` for a .json often enough that filtering strictly
+        // greys out the very file the person is trying to pick.
+        ActivityResultContracts.OpenDocument()
+    ) { uri -> uri?.let(onImportFrom) }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -92,10 +114,32 @@ fun FeedHealthScreen(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 SettingToggle(
                     title = "Live watch",
-                    subtitle = "Poll every minute from 09:00 to 15:45 on weekdays. " +
+                    subtitle = "Poll every minute from 09:00 to 12:00 and 13:30 to 15:45 " +
+                        "on weekdays. " +
                         "Shows a permanent notification while it runs.",
                     enabled = watchEnabled,
                     onToggle = onToggleWatch,
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                SettingAction(
+                    title = "Company list",
+                    subtitle = "Tagging only finds companies it knows about. Pulls the " +
+                        "current NSE list — refreshed weekly on its own.",
+                    action = "Refresh",
+                    message = state.lexiconMessage,
+                    onClick = onRefreshCompanyList,
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                BackupRow(
+                    message = state.backupMessage,
+                    onExport = {
+                        onClearBackupMessage()
+                        exportLauncher.launch(FeedBackup.fileName(nowMillis))
+                    },
+                    onImport = {
+                        onClearBackupMessage()
+                        importLauncher.launch(arrayOf(FeedBackup.MIME_TYPE, "text/*", "*/*"))
+                    },
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
@@ -428,4 +472,91 @@ private fun FeedEditor(
             }
         },
     )
+}
+
+/**
+ * Backing the feed list up, and putting it back.
+ *
+ * Here rather than in a settings screen because this is where the thing being backed up
+ * lives, and because the moment you want it is the moment you have just finished adding
+ * a feed you spent twenty minutes finding.
+ *
+ * Restoring merges and never deletes, which the subtitle says outright — an import
+ * control that might silently wipe the list is one nobody presses.
+ */
+@Composable
+private fun BackupRow(
+    message: String?,
+    onExport: () -> Unit,
+    onImport: () -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)) {
+        Text(
+            text = "Backup",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = "Save your feed list to a file, or merge one back in. " +
+                "Restoring adds and updates; it never deletes.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+        Row(
+            Modifier.padding(top = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            TextButton(onClick = onExport) { Text("Back up") }
+            TextButton(onClick = onImport) { Text("Restore") }
+        }
+        if (message != null) {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
+}
+
+/**
+ * A setting that does something once rather than holding a state.
+ *
+ * Separate from the toggles above it because the feedback matters: a toggle's effect is
+ * visible in the toggle, and pressing this produces nothing you can see anywhere in the
+ * app — the whole result is that future stories tag better. Without a count reported back,
+ * there would be no way to tell a working refresh from one silently failing.
+ */
+@Composable
+private fun SettingAction(
+    title: String,
+    subtitle: String,
+    action: String,
+    message: String?,
+    onClick: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = 14.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = message ?: subtitle,
+                style = MaterialTheme.typography.labelSmall,
+                color = if (message != null) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+        TextButton(onClick = onClick) { Text(action) }
+    }
 }

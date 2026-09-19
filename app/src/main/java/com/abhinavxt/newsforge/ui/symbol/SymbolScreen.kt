@@ -30,15 +30,24 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.abhinavxt.newsforge.core.notify.WatchTier
 import com.abhinavxt.newsforge.data.model.ScoredArticle
-import com.abhinavxt.newsforge.ui.feed.StoryCard
+import com.abhinavxt.newsforge.ui.chart.ChartRange
+import com.abhinavxt.newsforge.ui.chart.MacdPane
+import com.abhinavxt.newsforge.ui.chart.PriceChart
+import com.abhinavxt.newsforge.ui.chart.RangeBar
+import com.abhinavxt.newsforge.ui.chart.RsiPane
 import com.abhinavxt.newsforge.ui.desk.QuotePanel
+import com.abhinavxt.newsforge.ui.feed.StoryCard
 import com.abhinavxt.newsforge.ui.feed.accent
 import com.abhinavxt.newsforge.ui.theme.Chalk500
+import com.abhinavxt.newsforge.ui.theme.QuoteDown
+import com.abhinavxt.newsforge.ui.theme.QuoteUp
 import com.abhinavxt.newsforge.ui.util.RelativeTime
 
 @Composable
 fun SymbolScreen(
     state: SymbolUiState,
+    chart: SymbolChartState,
+    onSetRange: (ChartRange) -> Unit,
     onSetTier: (WatchTier?) -> Unit,
     onOpenStory: (ScoredArticle) -> Unit,
     onToggleSave: (ScoredArticle) -> Unit,
@@ -69,7 +78,12 @@ fun SymbolScreen(
             )
         },
     ) { padding ->
-        if (state.loaded && state.summary?.storyCount == 0 && state.events.isEmpty()) {
+        // The chart counts as content. A company tapped from a filing may have no stored
+        // coverage at all and still be exactly what the reader came to look at, so the
+        // empty state only applies when there is nothing of any kind to show.
+        if (state.loaded && state.summary?.storyCount == 0 && state.events.isEmpty() &&
+            chart.candles.isEmpty()
+        ) {
             Box(Modifier.padding(padding).fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
                     text = "Nothing stored for ${state.symbol} yet.",
@@ -85,6 +99,11 @@ fun SymbolScreen(
         LazyColumn(Modifier.padding(padding).fillMaxSize()) {
             item {
                 Header(state, onSetTier)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            }
+            item {
+                RelativeStrength(state)
+                ChartSection(chart, onSetRange)
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
             for (section in state.sections) {
@@ -107,6 +126,9 @@ fun SymbolScreen(
                         // so navigating to it again would be a no-op that looks broken.
                         onSelectSymbol = {},
                         onToggleSymbol = {},
+                        // Grouped by date here, not by kind, so nothing above the card
+                        // says what sort of story it is.
+                        showCategory = true,
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
@@ -182,4 +204,125 @@ private fun Header(state: SymbolUiState, onSetTier: (WatchTier?) -> Unit) {
             )
         }
     }
+}
+
+/**
+ * Chart, levels and indicators, in the order they get read.
+ *
+ * One scroller with the timeline rather than a tab beside it. The whole point of this
+ * screen is that the price and the coverage are the same story, and a tab makes the
+ * reader hold one in their head while looking at the other.
+ */
+@Composable
+private fun ChartSection(
+    chart: SymbolChartState,
+    onSetRange: (ChartRange) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            for (range in ChartRange.entries) {
+                FilterChip(
+                    selected = chart.range == range,
+                    onClick = { onSetRange(range) },
+                    label = { Text(range.label, style = MaterialTheme.typography.labelSmall) },
+                )
+            }
+        }
+
+        PriceChart(
+            candles = chart.candles,
+            storyTimes = chart.storyTimes,
+            modifier = Modifier.padding(start = 16.dp, end = 4.dp, top = 12.dp),
+        )
+
+        // Drawn before the empty-chart notice, because it does not need candles: with no
+        // bars at all the exchange's own figures still fill it in, and a screen that can
+        // show something useful should not lead with an apology.
+        chart.yearRange?.let { RangeBar("52-week range", it) }
+
+        if (chart.candles.isEmpty()) {
+            // Said once, plainly. The desk is the only source of bars, and a reader whose
+            // bridge is not set up would otherwise be left staring at an empty frame
+            // wondering whether it is loading.
+            Text(
+                text = "Price history comes from the desk. Ask it for candles from the Desk tab, " +
+                    "or check the bridge is set up.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Chalk500,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+            return
+        }
+
+        RsiPane(chart.rsi)
+        MacdPane(chart.macd)
+
+        chart.mfi.lastOrNull { it != null }?.let { mfi ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = "MFI 14",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = String.format(java.util.Locale.US, "%.1f", mfi),
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The stock's move, and the market's, on one line.
+ *
+ * The number a reader arrives with is "it is up four per cent". The number that answers
+ * whether the story mattered is "and everything else is up three". Without the second,
+ * every rising-tide day reads as a company-specific event, which is the single most
+ * common way a news feed misleads.
+ *
+ * Drawn only when both halves are there. Half of a comparison is worse than none — a lone
+ * percentage under a heading about the market invites the reader to supply the missing
+ * side themselves.
+ */
+@Composable
+private fun RelativeStrength(state: SymbolUiState) {
+    val breadth = state.breadth ?: return
+    val change = state.quote?.changePercent ?: return
+    val relative = breadth.relativeTo(change) ?: return
+
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column {
+            Text(
+                text = "vs ${breadth.index}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = "market ${breadth.formattedMedian()} · " +
+                    "${breadth.advances} up, ${breadth.declines} down",
+                style = MaterialTheme.typography.labelSmall,
+                color = Chalk500,
+            )
+        }
+        Text(
+            // Percentage points, said out loud. The gap between a 4% move and a 3% one is
+            // one point, and writing it as a percentage would be defensible arithmetic
+            // and unreadable in context.
+            text = String.format(java.util.Locale.US, "%+.2f pp", relative),
+            style = MaterialTheme.typography.titleSmall,
+            color = if (relative >= 0) QuoteUp else QuoteDown,
+        )
+    }
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 }

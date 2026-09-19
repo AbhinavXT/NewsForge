@@ -21,9 +21,18 @@ data class DeskMessage(
     val tags: List<String>,
     val clickUrl: String?,
     val receivedAtMillis: Long,
-    /** Parsed on read, not stored: the raw body is already the source of truth. */
-    val payload: DeskPayload? = null,
+    /**
+     * Parsed on read, not stored: the raw body is already the source of truth.
+     *
+     * A list because one message can carry several symbols — see
+     * [DeskPayload.KIND_QUOTE_BATCH]. A single quote is a list of one, so nothing that
+     * handles the common case has to know the batch exists.
+     */
+    val payloads: List<DeskPayload> = emptyList(),
 ) {
+    /** The first payload, for callers that only ever expect one. */
+    val payload: DeskPayload? get() = payloads.firstOrNull()
+
     /** 4 and 5 are ntfy's "high" and "max". */
     val isHighPriority: Boolean get() = priority >= 4
 
@@ -96,6 +105,18 @@ object NtfyMessages {
      * cost for a bridge. Instant delivery is what the ntfy app itself is for; this is for
      * having the history in one place.
      */
+    /**
+     * Where a message is sent.
+     *
+     * The same topic the app polls, which is what makes this a conversation rather than
+     * two channels: the desk already listens there, and anything sent comes back on the
+     * next poll alongside whatever it replied.
+     */
+    fun publishUrl(server: String, topic: String): String {
+        val base = server.trim().trimEnd('/').ifEmpty { "https://ntfy.sh" }
+        return "$base/${topic.trim()}"
+    }
+
     fun pollUrl(server: String, topic: String, sinceSeconds: Long?): String {
         val base = server.trim().trimEnd('/').ifEmpty { "https://ntfy.sh" }
         val since = sinceSeconds?.let { it.coerceAtLeast(0) }?.toString() ?: "12h"

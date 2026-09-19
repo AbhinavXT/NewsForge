@@ -10,10 +10,12 @@ import com.abhinavxt.newsforge.core.calendar.CalendarSection
 import com.abhinavxt.newsforge.core.feed.FeedKind
 import com.abhinavxt.newsforge.core.notify.WatchTier
 import com.abhinavxt.newsforge.data.NewsRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 
 data class CalendarUiState(
@@ -49,7 +51,9 @@ class CalendarViewModel(
             nseEnabled = feeds.any { it.enabled && it.kind != FeedKind.RSS.name },
             nowMillis = now,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CalendarUiState())
+    }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CalendarUiState())
 
     fun toggleFollowedOnly() {
         followedOnly.value = !followedOnly.value

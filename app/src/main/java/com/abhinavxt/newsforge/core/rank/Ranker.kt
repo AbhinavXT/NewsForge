@@ -17,6 +17,32 @@ data class RankInput(
 )
 
 /**
+ * One term of the score, and what it did to it.
+ *
+ * [multiplier] is a factor rather than a contribution: below one it pushed the story down,
+ * above one it pulled it up, and one means it had no opinion. That reads directly — "age
+ * halved it" — in a way an additive share cannot, since the same added amount matters
+ * differently at different totals.
+ */
+data class RankFactor(
+    val name: String,
+    val detail: String,
+    val multiplier: Double,
+) {
+    val isNeutral: Boolean get() = multiplier in 0.999..1.001
+}
+
+/** A score and the factors that produced it, in the order they were applied. */
+data class RankExplanation(val factors: List<RankFactor>) {
+    val score: Double get() = factors.fold(1.0) { acc, factor -> acc * factor.multiplier }
+
+    /** The factor that moved the score furthest from where it would otherwise be. */
+    val dominant: RankFactor?
+        get() = factors.filterNot { it.isNeutral }
+            .maxByOrNull { kotlin.math.abs(kotlin.math.ln(it.multiplier)) }
+}
+
+/**
  * Turns an article into a single comparable number.
  *
  * Multiplicative rather than a weighted sum, so that a fatal factor actually dominates:
@@ -38,11 +64,43 @@ object Ranker {
     /** Beyond this, extra coverage says nothing new and just crowds the top. */
     private const val CLUSTER_CAP = 8
 
-    fun score(input: RankInput, nowMillis: Long, phase: MarketPhase): Double {
-        val base = input.category.weight * input.tier.weight
-        return base * recency(input.publishedAtMillis, nowMillis, phase) *
-            symbolFactor(input.symbolCount) *
-            clusterFactor(input.clusterSize)
+    fun score(input: RankInput, nowMillis: Long, phase: MarketPhase): Double =
+        explain(input, nowMillis, phase).score
+
+    /**
+     * The same score, with its working shown.
+     *
+     * Ordering is the one thing this app asserts and never justifies, and the number of
+     * invisible inputs has only grown: a tier that now comes from open positions, a
+     * weight that shifts it, a half-life that changes with the session. When the top of
+     * the feed looks wrong there is currently no way to tell a bug from a disagreement,
+     * and no way to know which weight to reach for.
+     *
+     * Multiplicative, so each factor is a multiple of what came before and reads honestly
+     * as "doubled it" or "cut it in half" — which an additive model's contributions do
+     * not, since there the same term means different things at different totals.
+     */
+    fun explain(input: RankInput, nowMillis: Long, phase: MarketPhase): RankExplanation {
+        val factors = listOf(
+            RankFactor("Category", input.category.label, input.category.weight),
+            RankFactor("Source", input.tier.name.lowercase(), input.tier.weight),
+            RankFactor(
+                name = "Age",
+                detail = MarketClock.halfLifeMinutes(phase).let { "${it.toInt()}m half-life" },
+                multiplier = recency(input.publishedAtMillis, nowMillis, phase),
+            ),
+            RankFactor(
+                name = "Companies",
+                detail = if (input.symbolCount > 0) "${input.symbolCount} tagged" else "none",
+                multiplier = symbolFactor(input.symbolCount),
+            ),
+            RankFactor(
+                name = "Coverage",
+                detail = if (input.clusterSize > 1) "${input.clusterSize} outlets" else "1 outlet",
+                multiplier = clusterFactor(input.clusterSize),
+            ),
+        )
+        return RankExplanation(factors)
     }
 
     /**

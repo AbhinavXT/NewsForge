@@ -2,6 +2,7 @@
 
 package com.abhinavxt.newsforge.ui.desk
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,11 +10,22 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AssistChip
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -40,19 +52,56 @@ import com.abhinavxt.newsforge.ui.util.RelativeTime
 @Composable
 fun DeskScreen(
     state: DeskUiState,
-    onSave: (String, String, String) -> Unit,
+    onSave: (String, String, String, String) -> Unit,
     onTest: (String, String, String) -> Unit,
     onRefresh: () -> Unit,
     onMarkAllRead: () -> Unit,
     onOpenLink: (String) -> Unit,
     onClearTest: () -> Unit,
+    onSend: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var configuring by remember { mutableStateOf(false) }
+    var command by rememberSaveable { mutableStateOf("") }
+    val listState = rememberLazyListState()
+
+    // Newest first, so the top is where a reply lands. Following it automatically is the
+    // difference between a log and a conversation: something sent and answered while the
+    // screen is open should not need scrolling to find.
+    //
+    // Only when the top is already in view. Scrolled back through yesterday's signals,
+    // being yanked to the newest every fifteen seconds would make the history unreadable,
+    // and the reader who scrolled away is the one who chose to be there.
+    LaunchedEffect(state.messages.firstOrNull()?.id) {
+        if (listState.firstVisibleItemIndex <= FOLLOW_THRESHOLD) {
+            listState.animateScrollToItem(0)
+        }
+    }
+
+    // A send is an explicit intent to see what comes back, so it moves regardless of
+    // where the list was.
+    LaunchedEffect(state.sending) {
+        if (state.sending) listState.animateScrollToItem(0)
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
+        bottomBar = {
+            if (state.configured) {
+                CommandBar(
+                    value = command,
+                    sending = state.sending,
+                    recent = state.recentCommands,
+                    onValueChange = { command = it },
+                    onPick = { command = it },
+                    onSend = {
+                        onSend(command)
+                        command = ""
+                    },
+                )
+            }
+        },
         topBar = {
             TopAppBar(
                 title = {
@@ -109,20 +158,36 @@ fun DeskScreen(
                     )
                 }
             } else {
-                LazyColumn(Modifier.fillMaxSize()) {
+                LazyColumn(Modifier.fillMaxSize(), state = listState) {
                     items(state.messages, key = { it.id }) { message ->
-                        val payload = message.payload
-                        if (payload != null) {
+                        val quotes = message.payloads
+                        if (quotes.isNotEmpty()) {
                             // A structured push is data, not prose: rendering it as a
                             // line of JSON would be worse than not sending it.
                             Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                                Text(
-                                    text = payload.symbol,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(bottom = 6.dp),
-                                )
-                                QuotePanel(payload, state.nowMillis)
+                                // Capped, because a batch covering a whole watchlist
+                                // would otherwise turn one message into a screenful and
+                                // bury the strategy signals this log exists for.
+                                for (quote in quotes.take(QUOTE_PREVIEW)) {
+                                    Text(
+                                        text = quote.symbol,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(bottom = 6.dp),
+                                    )
+                                    QuotePanel(
+                                        quote,
+                                        state.nowMillis,
+                                        Modifier.padding(bottom = 8.dp),
+                                    )
+                                }
+                                if (quotes.size > QUOTE_PREVIEW) {
+                                    Text(
+                                        text = "+${quotes.size - QUOTE_PREVIEW} more symbols",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Chalk500,
+                                    )
+                                }
                                 Text(
                                     text = RelativeTime.format(message.receivedAtMillis, state.nowMillis),
                                     style = MaterialTheme.typography.labelSmall,
@@ -146,8 +211,8 @@ fun DeskScreen(
         SetupDialog(
             state = state,
             onTest = onTest,
-            onSave = { server, topic, token ->
-                onSave(server, topic, token)
+            onSave = { server, topic, token, commandTopic ->
+                onSave(server, topic, token, commandTopic)
                 configuring = false
                 onClearTest()
             },
@@ -208,12 +273,13 @@ private fun MessageRow(message: DeskMessage, nowMillis: Long, onClick: () -> Uni
 private fun SetupDialog(
     state: DeskUiState,
     onTest: (String, String, String) -> Unit,
-    onSave: (String, String, String) -> Unit,
+    onSave: (String, String, String, String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var server by remember { mutableStateOf(state.server) }
     var topic by remember { mutableStateOf(state.topic) }
     var token by remember { mutableStateOf(state.token) }
+    var commandTopic by remember { mutableStateOf(state.commandTopic) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -231,6 +297,19 @@ private fun SetupDialog(
                     value = topic,
                     onValueChange = { topic = it },
                     label = { Text("Topic") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                )
+                OutlinedTextField(
+                    value = commandTopic,
+                    onValueChange = { commandTopic = it },
+                    label = { Text("Command topic (optional)") },
+                    supportingText = {
+                        Text(
+                            "Leave blank if the desk listens on the same topic it replies on.",
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                 )
@@ -258,7 +337,7 @@ private fun SetupDialog(
         confirmButton = {
             TextButton(
                 enabled = topic.isNotBlank(),
-                onClick = { onSave(server, topic, token) },
+                onClick = { onSave(server, topic, token, commandTopic) },
             ) { Text("Save") }
         },
         dismissButton = {
@@ -272,3 +351,106 @@ private fun SetupDialog(
         },
     )
 }
+
+/**
+ * Quotes shown per message in the desk log.
+ *
+ * The log is a record of what the desk said, not a market screen — the feed and the
+ * symbol screen are where prices belong. Three is enough to confirm a batch arrived and
+ * looks right, which is all this view is for.
+ */
+private const val QUOTE_PREVIEW = 3
+
+/**
+ * A line to the desk.
+ *
+ * The bridge was read-only, while the desk on the other end has been announcing "remote
+ * control online, send /help" into a log this app could only watch. Everything needed to
+ * answer it was already here — the topic, the token, the HTTP client — and nothing was
+ * pointed at it.
+ *
+ * No command palette, and no validation of what is typed. The vocabulary belongs to the
+ * desk and changes there without this app hearing about it; a list of known commands
+ * would be a second place to update and a confident way to be wrong. What is offered
+ * instead is what has worked before, which stays right by construction.
+ */
+@Composable
+private fun CommandBar(
+    value: String,
+    sending: Boolean,
+    recent: List<String>,
+    onValueChange: (String) -> Unit,
+    onPick: (String) -> Unit,
+    onSend: () -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface)
+            // The keyboard covers this bar without it. `enableEdgeToEdge` switches the
+            // window to drawing behind the system bars, which also stops the manifest's
+            // `adjustResize` from resizing anything — so the composer stays where it was
+            // and the keyboard is simply drawn over it. Nothing in the manifest fixes
+            // that; the inset has to be applied here.
+            //
+            // After the background, so the surface colour fills the strip the padding
+            // opens up rather than leaving the scaffold showing through behind it.
+            .imePadding()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        // Only while the field is empty: once there is something to send, a row of past
+        // commands is competing with the thing being typed.
+        if (recent.isNotEmpty() && value.isEmpty()) {
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                for (line in recent) {
+                    AssistChip(
+                        onClick = { onPick(line) },
+                        label = {
+                            Text(
+                                text = line,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontFamily = FontFamily.Monospace,
+                                maxLines = 1,
+                            )
+                        },
+                    )
+                }
+            }
+        }
+        Row(
+            Modifier.fillMaxWidth().padding(top = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OutlinedTextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                enabled = !sending,
+                placeholder = {
+                    Text("/help", style = MaterialTheme.typography.bodyMedium)
+                },
+                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                    fontFamily = FontFamily.Monospace,
+                ),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(onSend = { onSend() }),
+            )
+            TextButton(onClick = onSend, enabled = !sending && value.isNotBlank()) {
+                Text(if (sending) "…" else "Send")
+            }
+        }
+    }
+}
+
+/**
+ * How far down the list the reader can be and still be followed to the newest message.
+ *
+ * One, not zero: a list resting a few pixels into its first item still counts as being at
+ * the top, and requiring an exact zero would leave it stuck after the smallest scroll.
+ */
+private const val FOLLOW_THRESHOLD = 1

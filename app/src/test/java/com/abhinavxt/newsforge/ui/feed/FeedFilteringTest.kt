@@ -3,6 +3,8 @@ package com.abhinavxt.newsforge.ui.feed
 import com.abhinavxt.newsforge.core.model.Category
 import com.abhinavxt.newsforge.core.model.CategoryGroup
 import com.abhinavxt.newsforge.core.model.SourceTier
+import com.abhinavxt.newsforge.core.mute.MuteKind
+import com.abhinavxt.newsforge.core.mute.MuteRule
 import com.abhinavxt.newsforge.data.model.ArticleSummary
 import com.abhinavxt.newsforge.data.model.ScoredArticle
 import org.junit.Assert.assertEquals
@@ -91,6 +93,33 @@ class FeedFilteringTest {
         assertEquals(0, counts[CategoryGroup.OTHER])
         // Every group is present as a key even at zero, so the chip row is stable.
         assertEquals(CategoryGroup.entries.size, counts.size)
+    }
+
+    @Test
+    fun theTwoPassFormMatchesTheSinglePassOne() {
+        // The feed runs the mute pass once and reuses it for both the visible list and
+        // the chip counts. It must agree with the combined form the tests above use.
+        val mutes = listOf(MuteRule(MuteKind.SYMBOL, "INFY"))
+        val filters = listOf(
+            FeedFilter(),
+            FeedFilter(group = CategoryGroup.MOVERS),
+            FeedFilter(unreadOnly = true),
+            FeedFilter(watchlistOnly = true),
+            FeedFilter(savedOnly = true),
+            FeedFilter(query = "policy"),
+            FeedFilter(symbol = "TATASTEEL"),
+        )
+        for (filter in filters) {
+            assertEquals(
+                filter.toString(),
+                FeedFiltering.apply(items, filter, setOf("TATASTEEL"), mutes),
+                FeedFiltering.applyFilter(
+                    FeedFiltering.applyMutes(items, mutes),
+                    filter,
+                    setOf("TATASTEEL"),
+                ),
+            )
+        }
     }
 
     @Test
@@ -206,4 +235,14 @@ class FeedModeTest {
         // Nothing is live on a Saturday; the useful read is the accumulated digest.
         assertEquals(FeedMode.BRIEF, FeedMode.defaultFor(ist("2026-09-12T11:00:00")))
     }
+
+//    @Test
+//    fun theTextFilterStillWorksForCallersThatUseIt() {
+//        // The feed now searches the database rather than filtering the loaded list, but
+//        // `apply` keeps its text matching: other screens still narrow in memory, and a
+//        // silently ignored query would be worse than a slow one.
+//        val hits = FeedFiltering.apply(items, FeedFilter(query = "policy"))
+//        assertTrue(hits.size < items.size)
+//        assertTrue(hits.all { FeedFiltering.matchesQuery(it.article, "policy") })
+//    }
 }

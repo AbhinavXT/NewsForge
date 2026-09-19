@@ -4,7 +4,6 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.ServiceInfo
-import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.work.BackoffPolicy
@@ -35,7 +34,8 @@ import java.util.concurrent.TimeUnit
  * WorkManager and does not allow from an ordinary background service start.
  *
  * It costs a permanent notification while it runs, so it is opt-in, and it stops itself at
- * 15:45 rather than lingering — a watch that outlives the session is just battery drain.
+ * the last segment rather than lingering — a watch that outlives the session is just
+ * battery drain. The day is split in two; see [MarketSchedule.SEGMENTS] for why.
  */
 class MarketWatchWorker(
     private val context: Context,
@@ -61,20 +61,26 @@ class MarketWatchWorker(
             delay(untilOpen)
         }
 
-        return try {
+        val result = try {
             setForeground(foregroundInfo("Watching the market"))
             runSession(container)
             Result.success()
         } catch (e: CancellationException) {
+            // Not rescheduled, and not in a `finally` either. Cancellation is either the
+            // user turning the watch off — where re-arming would quietly undo it — or
+            // WorkManager stopping us, which re-runs the request on its own.
             throw e
         } catch (e: Exception) {
             Log.w(TAG, "market watch ended early", e)
             Result.success()
-        } finally {
-            // Always queue the next day, even after a failure: a watch that silently stops
-            // forever is worse than one that has a bad afternoon.
-            reschedule(context)
         }
+
+        // Queue the next session even after a failure: a watch that silently stops
+        // forever is worse than one that has a bad afternoon. Re-read rather than
+        // reusing the check at the top, because the session is hours long and the
+        // setting may have been turned off somewhere in the middle of it.
+        if (container.watchPreferences.enabled) reschedule(context)
+        return result
     }
 
     private suspend fun runSession(container: com.abhinavxt.newsforge.di.AppContainer) {
@@ -82,8 +88,13 @@ class MarketWatchWorker(
             val now = System.currentTimeMillis()
             if (!MarketSchedule.isSessionActive(now)) return
 
-            val report = runCatching { container.repository.refresh() }.getOrNull()
-            runCatching { container.deskRepository.sync() }
+            // Exposure first. The tiers decide who gets alerted and how loudly, so a
+            // snapshot applied after the refresh would judge this poll's headlines
+            // against the previous poll's positions — wrong in exactly the window that
+            // matters, the minutes after you open or close something.
+            syncDesk(container)
+            val report = tolerate(TAG, "refresh") { container.repository.refresh() }
+            syncQuotes(container)
 
             report?.let {
                 setForeground(
@@ -116,11 +127,14 @@ class MarketWatchWorker(
             .setSilent(true)
             .build()
 
-        return if (Build.VERSION.SDK_INT >= 29) {
-            ForegroundInfo(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-        } else {
-            ForegroundInfo(NOTIFICATION_ID, notification)
-        }
+        // Unconditional: minSdk is 30, so the pre-29 branch this used to carry could
+        // never be taken, and a dead branch around a service type is the kind that gets
+        // trusted when the minimum later moves.
+        return ForegroundInfo(
+            NOTIFICATION_ID,
+            notification,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+        )
     }
 
     private fun ensureChannel() {
@@ -140,8 +154,20 @@ class MarketWatchWorker(
         /** Longest the worker will wait in-process rather than handing back to scheduling. */
         private const val MAX_PREROLL_MS = 20L * 60 * 1000
 
+        /**
+         * Shortest gap before the watch is allowed to start again.
+         *
+         * [MarketSchedule.millisUntilNextSession] returns zero while a session is already
+         * running, which is the recovery path — the worker died at 11:40 and should come
+         * back. Restarting with no delay makes that a spin instead: if whatever killed it
+         * is going to kill it again, `setForeground` being refused being the obvious
+         * candidate, it would relaunch continuously to the end of the segment.
+         */
+        private const val RESTART_DELAY_MS = 60L * 1000
+
         fun reschedule(context: Context) {
-            val delay = MarketSchedule.millisUntilNextSession(System.currentTimeMillis())
+            val untilNext = MarketSchedule.millisUntilNextSession(System.currentTimeMillis())
+            val delay = if (untilNext <= 0L) RESTART_DELAY_MS else untilNext
             val request = OneTimeWorkRequestBuilder<MarketWatchWorker>()
                 .setInitialDelay(delay, TimeUnit.MILLISECONDS)
                 .setConstraints(

@@ -115,4 +115,21 @@ class StoryPresentationTest {
         assertTrue(text.contains("Mint"))
         assertTrue(text.endsWith("https://example.com/story/1"))
     }
+
+    @Test
+    fun aPriceMoveIsAlwaysSignedAndAlwaysToOneDecimal() {
+        // Fixed width under a monospace face is the point: a column of these has to be
+        // scannable down the list.
+        assertEquals("+1.4%", StoryPresentation.changeLabel(1.44))
+        assertEquals("-2.5%", StoryPresentation.changeLabel(-2.45))
+        assertEquals("+12.0%", StoryPresentation.changeLabel(12.0))
+    }
+
+    @Test
+    fun aMoveThatRoundsToNothingIsNotGivenADirection() {
+        // "-0.0%" reads as a fall that did not happen.
+        assertEquals("0.0%", StoryPresentation.changeLabel(-0.04))
+        assertEquals("0.0%", StoryPresentation.changeLabel(0.0))
+        assertEquals("0.0%", StoryPresentation.changeLabel(0.02))
+    }
 }
