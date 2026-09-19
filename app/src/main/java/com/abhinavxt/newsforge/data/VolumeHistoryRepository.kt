@@ -2,14 +2,19 @@ package com.abhinavxt.newsforge.data
 
 import android.util.Log
 import com.abhinavxt.newsforge.core.desk.DeskPayload
+import com.abhinavxt.newsforge.core.quote.VolumeCurve
 import com.abhinavxt.newsforge.core.quote.VolumeProfile
+import com.abhinavxt.newsforge.core.quote.VolumeSample
 import com.abhinavxt.newsforge.data.db.VolumeSampleDao
 import com.abhinavxt.newsforge.data.db.VolumeSampleEntity
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
 /**
@@ -36,6 +41,28 @@ class VolumeHistoryRepository(
 
     /** Relative volume per symbol at the current mark of the session. Empty out of hours. */
     fun relativeVolumes(): StateFlow<Map<String, Double>> = state.asStateFlow()
+
+    /**
+     * Today's volume shape for one company, against its own normal.
+     *
+     * Reads a month of sessions rather than the [VolumeProfile.MIN_PRIOR_SESSIONS] the
+     * ratio needs: the median is steadier over twenty days than over five, and the rows
+     * are twenty-five small numbers a session, so the wider window costs nothing worth
+     * counting.
+     */
+    fun curve(symbol: String): Flow<VolumeCurve?> {
+        val wanted = symbol.trim().uppercase()
+        return dao.observeForSymbol(wanted, VolumeProfile.sessionDay(clock()) - CURVE_WINDOW_DAYS)
+            .map { rows ->
+                VolumeProfile.curve(
+                    samples = rows.map {
+                        VolumeSample(it.symbol, it.sessionDay, it.bucket, it.volume)
+                    },
+                    todayDay = VolumeProfile.sessionDay(clock()),
+                )
+            }
+            .flowOn(Dispatchers.Default)
+    }
 
     /**
      * Records this poll's volumes and recomputes the ratios.
@@ -88,3 +115,6 @@ class VolumeHistoryRepository(
         const val KEEP_SESSIONS = 30L
     }
 }
+
+/** Sessions of history read for the curve; a month of trading days with room to spare. */
+private const val CURVE_WINDOW_DAYS = 45L

@@ -132,6 +132,47 @@ class CandleRepository(
     }
 
     /**
+     * Tops up daily bars for followed companies, ahead of anyone asking.
+     *
+     * Opening a followed ticker used to mean a request crossing the bridge and a wait on
+     * the desk — ten seconds of placeholder for data that could have been sitting there.
+     * The sync already runs every fifteen minutes and already knows the watchlist, so the
+     * chart can simply be ready.
+     *
+     * Two things keep this from flooding the bridge. Only a few symbols per run, oldest
+     * first, so a fresh install fills in over an hour or two rather than asking for
+     * fifteen thousand bars at once. And a company that already has history gets a short
+     * top-up rather than the full backfill — the last few sessions are all that can have
+     * changed, and that is one message instead of five.
+     *
+     * @return how many requests were published.
+     */
+    suspend fun warm(symbols: List<String>, max: Int = WARM_PER_SYNC): Int =
+        withContext(ioDispatcher) {
+            val interval = CandleInterval.DAY
+            val due = symbols
+                .map { it.trim().uppercase() }
+                .filter { it.isNotEmpty() }
+                .distinct()
+                .map { it to dao.newestOpenTime(it, interval.wireName) }
+                .filter { (_, newest) ->
+                    newest == null || clock() - newest >= staleAfterMillis(interval)
+                }
+                // Never-fetched first, then stalest. A watchlist added to yesterday should
+                // fill the new names in before re-topping the ones that are a day old.
+                .sortedBy { it.second ?: Long.MIN_VALUE }
+                .take(max)
+
+            var sent = 0
+            for ((symbol, newest) in due) {
+                val bars = if (newest == null) defaultBars(interval) else TOP_UP_BARS
+                if (request(symbol, interval, bars)) sent++
+            }
+            if (sent > 0) Log.i(TAG, "warmed $sent of ${due.size} due symbols")
+            sent
+        }
+
+    /**
      * How much history is worth keeping, by bar size.
      *
      * Two years of daily bars so the 52-week range has a full window either side of
@@ -170,6 +211,27 @@ class CandleRepository(
          */
         fun defaultBars(interval: CandleInterval): Int =
             if (interval.isIntraday) 400 else 300
+
+        /**
+         * Symbols topped up per sync.
+         *
+         * Small because the sync is frequent, and because each one is a round trip to
+         * Kite on the desk's side under a three-per-second rate limit. Four every fifteen
+         * minutes covers any watchlist worth the name inside an hour, and a first run on
+         * a long list spreads its backfill instead of asking for fifty histories at once.
+         */
+        const val WARM_PER_SYNC = 4
+
+        /**
+         * Bars in a top-up, once a company already has history.
+         *
+         * Only the last few sessions can have changed, and the newest bar is re-sent
+         * anyway to correct the one that was still forming. Ten covers a long weekend
+         * plus a missed sync, and fits in a single message where a full backfill takes
+         * five — which is the difference between this running twice a day per symbol and
+         * being too expensive to run at all.
+         */
+        const val TOP_UP_BARS = 10
     }
 }
 

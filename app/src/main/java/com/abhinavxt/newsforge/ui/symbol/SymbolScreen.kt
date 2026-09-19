@@ -10,9 +10,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.FilterChip
@@ -30,14 +33,21 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.abhinavxt.newsforge.core.notify.WatchTier
 import com.abhinavxt.newsforge.data.model.ScoredArticle
+import com.abhinavxt.newsforge.core.quote.PriceSummary
+import com.abhinavxt.newsforge.core.quote.TargetConsensus
 import com.abhinavxt.newsforge.ui.chart.ChartRange
+import com.abhinavxt.newsforge.ui.chart.formatPrice
+import com.abhinavxt.newsforge.ui.chart.formatVolume
 import com.abhinavxt.newsforge.ui.chart.MacdPane
 import com.abhinavxt.newsforge.ui.chart.PriceChart
 import com.abhinavxt.newsforge.ui.chart.RangeBar
+import com.abhinavxt.newsforge.ui.chart.ResearchSkeleton
 import com.abhinavxt.newsforge.ui.chart.RsiPane
+import com.abhinavxt.newsforge.ui.chart.VolumePane
 import com.abhinavxt.newsforge.ui.desk.QuotePanel
 import com.abhinavxt.newsforge.ui.feed.StoryCard
 import com.abhinavxt.newsforge.ui.feed.accent
+import com.abhinavxt.newsforge.ui.theme.Accent
 import com.abhinavxt.newsforge.ui.theme.Chalk500
 import com.abhinavxt.newsforge.ui.theme.QuoteDown
 import com.abhinavxt.newsforge.ui.theme.QuoteUp
@@ -82,7 +92,7 @@ fun SymbolScreen(
         // coverage at all and still be exactly what the reader came to look at, so the
         // empty state only applies when there is nothing of any kind to show.
         if (state.loaded && state.summary?.storyCount == 0 && state.events.isEmpty() &&
-            chart.candles.isEmpty()
+            chart.candles.isEmpty() && !chart.awaiting
         ) {
             Box(Modifier.padding(padding).fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
@@ -102,8 +112,23 @@ fun SymbolScreen(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
             item {
-                RelativeStrength(state)
-                ChartSection(chart, onSetRange)
+                // Nothing yet and something on the way: show the shape of what is coming
+                // rather than a price header with no price above a chart saying there is
+                // no history. Both of those are true for about ten seconds and read as
+                // permanent.
+                if (chart.awaiting && chart.candles.isEmpty() && chart.price == null) {
+                    RangeChips(chart.range, onSetRange)
+                    ResearchSkeleton()
+                } else {
+                    // Only where the header above has nothing to show. QuotePanel already
+                    // renders a live quote in full — price, day range, VWAP, levels — so
+                    // this is for the case that used to render nothing at all: a company
+                    // outside the watchlist, where no quote is fetched and the only price
+                    // the app holds is the close of the newest bar it has.
+                    if (state.quote == null) PriceHeader(chart.price, state.nowMillis)
+                    RelativeStrength(state)
+                    ChartSection(chart, onSetRange)
+                }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
             for (section in state.sections) {
@@ -129,6 +154,7 @@ fun SymbolScreen(
                         // Grouped by date here, not by kind, so nothing above the card
                         // says what sort of story it is.
                         showCategory = true,
+                        prices = chart.prices,
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
@@ -177,6 +203,19 @@ private fun Header(state: SymbolUiState, onSetTier: (WatchTier?) -> Unit) {
             }
         }
 
+        // Under the tiers, because it qualifies them. A chip says what kind of exposure
+        // this is; the figure says whether it is a position that can move the account or
+        // one bought to have a reason to pay attention — and every story below reads
+        // differently depending on which. The desk has been sending it all along.
+        state.positionWeight?.let { weight ->
+            Text(
+                text = String.format(java.util.Locale.US, "%.1f%% of book", weight),
+                style = MaterialTheme.typography.labelSmall,
+                color = Accent,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+
         val counts = state.summary?.byCategory.orEmpty()
         if (counts.isNotEmpty()) {
             // The point of the screen: four regulatory items in a quarter reads very
@@ -219,18 +258,7 @@ private fun ChartSection(
     onSetRange: (ChartRange) -> Unit,
 ) {
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            for (range in ChartRange.entries) {
-                FilterChip(
-                    selected = chart.range == range,
-                    onClick = { onSetRange(range) },
-                    label = { Text(range.label, style = MaterialTheme.typography.labelSmall) },
-                )
-            }
-        }
+        RangeChips(chart.range, onSetRange)
 
         PriceChart(
             candles = chart.candles,
@@ -242,6 +270,7 @@ private fun ChartSection(
         // bars at all the exchange's own figures still fill it in, and a screen that can
         // show something useful should not lead with an apology.
         chart.yearRange?.let { RangeBar("52-week range", it) }
+        chart.targets?.let { TargetStrip(it, chart.price?.last) }
 
         if (chart.candles.isEmpty()) {
             // Said once, plainly. The desk is the only source of bars, and a reader whose
@@ -256,6 +285,10 @@ private fun ChartSection(
             )
             return
         }
+
+        // Above the oscillators: it is the only one of the three that says anything about
+        // why a move happened rather than how far it has gone.
+        chart.volume?.let { VolumePane(it) }
 
         RsiPane(chart.rsi)
         MacdPane(chart.macd)
@@ -325,4 +358,170 @@ private fun RelativeStrength(state: SymbolUiState) {
         )
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+}
+
+/**
+ * Price, change and the day's numbers, directly under the title.
+ *
+ * The screen used to open with a chart and no price on it, because the only price it knew
+ * how to show came from a quote and a quote only exists for followed names. The number a
+ * reader wants first was the one thing missing.
+ *
+ * Laid out as one large line and a quiet grid, rather than an even row of six figures.
+ * Price and change are what gets read on arrival; open, high, low and volume are what gets
+ * read second, if at all, and giving them equal weight makes the first pair harder to find
+ * rather than the second pair easier.
+ */
+@Composable
+private fun PriceHeader(price: PriceSummary?, nowMillis: Long) {
+    if (price == null) return
+    val up = (price.change ?: 0.0) >= 0
+    val tint = if (up) QuoteUp else QuoteDown
+
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(
+                text = "₹${formatPrice(price.last)}",
+                style = MaterialTheme.typography.headlineSmall,
+            )
+            Spacer(Modifier.width(10.dp))
+            price.changePercent?.let { percent ->
+                Text(
+                    text = String.format(
+                        java.util.Locale.US,
+                        "%+.2f (%+.2f%%)",
+                        price.change ?: 0.0,
+                        percent,
+                    ),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = tint,
+                    modifier = Modifier.padding(bottom = 2.dp),
+                )
+            }
+        }
+
+        // Said plainly, because the difference matters and no styling conveys it. A
+        // six-month-old chart with a live price and a six-month-old chart with Thursday's
+        // close look identical, and only one of them is worth acting on.
+        Text(
+            text = when (price.source) {
+                // Relative for a live price — "2m ago" is what tells you whether to trust
+                // it. A day label for a close, because "18 Sep" is the fact and "3 days
+                // ago" makes the reader do the subtraction to get back to it.
+                PriceSummary.Source.LIVE ->
+                    "Live · ${RelativeTime.format(price.asOfMillis ?: nowMillis, nowMillis)}"
+                PriceSummary.Source.LAST_CLOSE ->
+                    "Last close · ${RelativeTime.dayLabel(price.asOfMillis ?: nowMillis, nowMillis)}"
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = Chalk500,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+
+        val cells = buildList {
+            price.open?.let { add("Open" to formatPrice(it)) }
+            price.high?.let { add("High" to formatPrice(it)) }
+            price.low?.let { add("Low" to formatPrice(it)) }
+            price.vwap?.let { add("VWAP" to formatPrice(it)) }
+            price.volume?.let { add("Volume" to formatVolume(it)) }
+        }
+        if (cells.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
+            // Three to a row: four is too tight for a five-digit price on a narrow phone,
+            // and two wastes half the width on the common case.
+            for (row in cells.chunked(3)) {
+                Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                    for (cell in row) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = cell.first,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Chalk500,
+                            )
+                            Text(text = cell.second, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                    // Keeps a short final row aligned with the one above instead of
+                    // spreading two cells across the full width.
+                    repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+        }
+    }
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+}
+
+/**
+ * The range selector, shared by the chart and the skeleton that stands in for it.
+ *
+ * Live during the wait on purpose. The ranges are known before any data is, and a reader
+ * who opens on 1M and wants 1Y should not have to wait for the first to arrive before
+ * asking for the second.
+ */
+@Composable
+private fun RangeChips(selected: ChartRange, onSetRange: (ChartRange) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        for (range in ChartRange.entries) {
+            FilterChip(
+                selected = selected == range,
+                onClick = { onSetRange(range) },
+                label = { Text(range.label, style = MaterialTheme.typography.labelSmall) },
+            )
+        }
+    }
+}
+
+/**
+ * Where the brokers covering this name think it should trade.
+ *
+ * A band rather than a number, because the number is read out of a headline and could be
+ * wrong. Shown with the count, so a consensus of two reads as the thin evidence it is,
+ * and with the gap to the current price, which is the only part anyone acts on.
+ *
+ * Placed under the 52-week bar on purpose: one says where the price has been, the other
+ * where somebody is paid to say it is going, and reading them together is the point.
+ */
+@Composable
+private fun TargetStrip(consensus: TargetConsensus, last: Double?) {
+    val gap = last?.takeIf { it > 0 }?.let { (consensus.median - it) / it * 100.0 }
+
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Broker targets · ${consensus.count} note" +
+                    if (consensus.count == 1) "" else "s",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = gap?.let { String.format(java.util.Locale.US, "%+.1f%%", it) } ?: "—",
+                style = MaterialTheme.typography.labelMedium,
+                color = when {
+                    gap == null -> Chalk500
+                    gap >= 0 -> QuoteUp
+                    else -> QuoteDown
+                },
+            )
+        }
+        Text(
+            text = "${formatPrice(consensus.low)} – ${formatPrice(consensus.high)} " +
+                "· median ${formatPrice(consensus.median)}",
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+        // Said out loud, because nothing else on this screen is guessed from prose and a
+        // reader should know which one is.
+        Text(
+            text = "Read from headlines — treat as approximate",
+            style = MaterialTheme.typography.labelSmall,
+            color = Chalk500,
+        )
+    }
 }

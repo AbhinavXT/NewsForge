@@ -96,6 +96,10 @@ object NtfyJson {
      * [flatten] skips arrays on purpose — see [Candles] for why that rule is worth
      * keeping and why the string form is the one that fits the message limit anyway.
      */
+    /** True when the body is data the app stores rather than a message to show. */
+    fun isMachinePayload(body: String): Boolean =
+        flatten(body)?.let { DeskPayloads.isMachine(it) } == true
+
     fun parseCandles(body: String): CandleBatch? =
         flatten(body)?.let { Candles.fromFlat(it) }
 

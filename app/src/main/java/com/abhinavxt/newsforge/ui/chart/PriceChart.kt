@@ -276,3 +276,17 @@ internal fun formatPrice(value: Double): String =
     } else {
         String.format(java.util.Locale.US, "%.2f", value)
     }
+
+/**
+ * Volume in the units an Indian market reader thinks in.
+ *
+ * 1,23,45,678 is unreadable at a glance and "12345678" worse; "1.23 Cr" is the figure as
+ * anyone here would say it aloud. Lakh and crore rather than K and M for the same reason
+ * the prices carry rupees.
+ */
+internal fun formatVolume(value: Double): String = when {
+    value >= 1_00_00_000 -> String.format(java.util.Locale.US, "%.2f Cr", value / 1_00_00_000)
+    value >= 1_00_000 -> String.format(java.util.Locale.US, "%.2f L", value / 1_00_000)
+    value >= 1_000 -> String.format(java.util.Locale.US, "%,.0f", value)
+    else -> value.toLong().toString()
+}

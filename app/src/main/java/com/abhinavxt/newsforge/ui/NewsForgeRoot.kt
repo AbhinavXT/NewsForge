@@ -198,6 +198,8 @@ fun NewsForgeRoot(
                             deskRepository = deskRepository,
                             quoteRepository = quoteRepository,
                             candleRepository = candleRepository,
+                            volumeHistoryRepository = volumeHistoryRepository,
+                            priceHistoryRepository = priceHistoryRepository,
                             symbol = detail.symbol,
                         ),
                     )

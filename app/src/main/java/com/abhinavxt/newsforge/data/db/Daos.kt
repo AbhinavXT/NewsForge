@@ -437,6 +437,13 @@ interface VolumeSampleDao {
     )
     suspend fun atBucket(bucket: Int, sinceDay: Long): List<VolumeSampleEntity>
 
+    /** Every mark for one symbol across recent sessions, for the session-shape curve. */
+    @Query(
+        "SELECT * FROM volume_sample WHERE symbol = :symbol AND sessionDay >= :sinceDay " +
+            "ORDER BY sessionDay, bucket"
+    )
+    fun observeForSymbol(symbol: String, sinceDay: Long): Flow<List<VolumeSampleEntity>>
+
     @Query("DELETE FROM volume_sample WHERE sessionDay < :cutoffDay")
     suspend fun pruneBefore(cutoffDay: Long): Int
 }

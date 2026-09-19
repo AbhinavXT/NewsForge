@@ -447,6 +447,22 @@ class NewsRepository(
      * The watchlist split by source, for screens that have to explain a tier as well as
      * apply it. One subscription; the three maps are derived from the same rows.
      */
+    /**
+     * Share of the portfolio per symbol, as the desk reported it.
+     *
+     * Already stored by [applyPositions] and, until now, read by nothing. A tier says
+     * what kind of exposure a name is; this says how much of the account is behind it,
+     * which is what separates the position that can move your month from the one bought
+     * to have a reason to pay attention. Desk rows only — a name followed by hand has no
+     * weight, and inventing one would be worse than leaving it blank.
+     */
+    fun watchlistWeights(): Flow<Map<String, Double>> = watchlistDao.observeAll().map { rows ->
+        rows.asSequence()
+            .filter { it.source == WatchSource.DESK.name }
+            .mapNotNull { row -> row.weight?.let { row.symbol to it } }
+            .toMap()
+    }
+
     fun watchlistView(): Flow<WatchlistView> = watchlistDao.observeAll().map { rows ->
         val manual = rows.filter { it.source == WatchSource.MANUAL.name }
         val desk = rows.filter { it.source == WatchSource.DESK.name }

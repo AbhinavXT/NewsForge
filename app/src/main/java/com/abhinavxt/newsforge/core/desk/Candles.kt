@@ -16,12 +16,12 @@ import java.util.Locale
  * obvious shape. So the bars travel as one string field the sender writes on purpose —
  * which also happens to be the only shape that fits.
  *
- * ntfy caps a message at four kilobytes unless the server is configured otherwise, and
- * two hundred bars as JSON objects is roughly twice that. Positional text with no keys,
- * no quotes and no braces holds between seventy and ninety-five daily bars in the same
- * space — the spread is how wide the prices are, ninety-five for a three-digit price and
- * seventy-four for a six-digit one. Seventy is the batch size that holds for anything on
- * the exchange, and is what the desk should send per message.
+ * ntfy caps a message at four kilobytes by default, and two hundred bars as JSON objects
+ * is roughly twice that. Positional text with no keys, no quotes and no braces holds
+ * between seventy and ninety-five daily bars in that space — the spread is how wide the
+ * prices are. A self-hosted server with a larger `message-size-limit` fits a year in one
+ * message; the desk sizes the split against its own server's limit rather than against a
+ * fixed bar count, so nothing here has to know which it is talking to.
  *
  * ## The format
  *

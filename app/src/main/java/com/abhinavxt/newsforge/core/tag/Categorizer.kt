@@ -73,6 +73,33 @@ object Categorizer {
                 "\\bncd\\b|raises? (rs|\\$|₹)"
         ),
         rule(
+            Category.PRICE_TARGET,
+            // Before RATING on purpose. The two overlap on the word "upgrade", and a
+            // headline carrying both a broker's call and an agency's name — "S&P raises
+            // target" — is about the call.
+            //
+            // No broker names in here, though the temptation is strong. A bare "HSBC" or
+            // "Nomura" also appears on "HSBC cuts India GDP forecast", which is macro;
+            // matching the house rather than what it said would quietly capture every
+            // economics note they publish. The call language is what identifies these.
+            //
+            // "target" only ever appears welded to "price". A bare "target of Rs X"
+            // reads as a broker's number and is far more often a government divestment
+            // target or a company's own revenue goal — both of which would land here
+            // instead of in Policy, since Policy is matched later.
+            "target price|price target|\\bprice tgt\\b|" +
+                "initiat(es|ed|ing) coverage|resum(es|ed) coverage|" +
+                "(maintain|reiterat|retain)(s|ed|es)? (its )?" +
+                "(buy|sell|hold|add|reduce|neutral|outperform|underperform|overweight|underweight)\\b|" +
+                "(upgrade|downgrade)(s|d)? .{0,30}\\bto " +
+                "(buy|sell|hold|add|reduce|neutral|outperform|underperform|overweight|underweight)\\b|" +
+                "\\b(buy|sell|hold) (call|rating)\\b|" +
+                "sees? .{0,25}\\bupside\\b|upside of \\d|\\bdownside of \\d|" +
+                "brokerages? (say|sees?|raise|cut|maintain|remain|turn|are|is|bullish|bearish|view)|" +
+                "brokerage (call|note|view)|" +
+                "analysts? (see|expect|raise|cut|remain)|\\btop pick(s)?\\b"
+        ),
+        rule(
             Category.RATING,
             "\\bcrisil\\b|\\bicra\\b|care ratings|india ratings|moody|s&p global|\\bfitch\\b|" +
                 "rating (upgrade|downgrade|action)|(upgrade|downgrade)[sd]? .{0,20}rating|" +

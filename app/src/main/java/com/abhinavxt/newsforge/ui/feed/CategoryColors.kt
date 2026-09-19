@@ -10,6 +10,7 @@ import com.abhinavxt.newsforge.ui.theme.CatOrder
 import com.abhinavxt.newsforge.ui.theme.CatPolicy
 import com.abhinavxt.newsforge.ui.theme.CatRegulatory
 import com.abhinavxt.newsforge.ui.theme.CatResults
+import com.abhinavxt.newsforge.ui.theme.CatViews
 
 /**
  * Accent per category.
@@ -29,6 +30,9 @@ val Category.accent: Color
         // does not change colour depending on which screen you meet it on.
         Category.DIVIDEND, Category.POLICY, Category.MACRO -> CatPolicy
         Category.GLOBAL, Category.GEOPOLITICS, Category.COMMODITY -> CatGlobal
+        // Its own hue: a broker's view should be distinguishable at a glance from the
+        // events around it, which is the entire reason it has its own bucket.
+        Category.PRICE_TARGET -> CatViews
         Category.MANAGEMENT, Category.OTHER -> CatNeutral
     }
 
@@ -45,5 +49,6 @@ val CategoryGroup.accent: Color
         CategoryGroup.RESULTS -> CatResults
         CategoryGroup.POLICY -> CatPolicy
         CategoryGroup.GLOBAL -> CatGlobal
+        CategoryGroup.VIEWS -> CatViews
         CategoryGroup.OTHER -> CatNeutral
     }

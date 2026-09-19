@@ -28,6 +28,8 @@ val CatOrder = Color(0xFF3FB950)
 val CatResults = Color(0xFF58A6FF)
 val CatPolicy = Color(0xFFD29922)
 val CatGlobal = Color(0xFF39C5CF)
+/** Broker calls — pink, distinct from the blue that marks reported numbers. */
+val CatViews = Color(0xFFDB61A2)
 val CatNeutral = Color(0xFF6E7681)
 
 // Price moves. Green and red are what every terminal and broker app in the country uses,

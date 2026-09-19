@@ -53,6 +53,13 @@ internal suspend fun syncDesk(container: AppContainer) {
         tolerate(TAG_DESK, "screens") { container.repository.applyScreens(result.screens) }
     }
     tolerate(TAG_DESK, "desk signals") { announce(container, result.stored) }
+
+    // Last, and only after a sync that worked. The replies land on a later poll, so this
+    // is asking the desk to have the answer ready rather than waiting for one — there is
+    // nothing to collect here and nothing downstream depends on it.
+    tolerate(TAG_DESK, "candle warm-up") {
+        container.candleRepository.warm(container.repository.watchlistSymbols().keys.toList())
+    }
 }
 
 /**

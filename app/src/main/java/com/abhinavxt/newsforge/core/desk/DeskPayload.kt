@@ -160,6 +160,21 @@ object DeskPayloads {
      */
     private val NON_QUOTE_KINDS = setOf(Candles.KIND)
 
+    /**
+     * Kinds that exist to be stored, not read.
+     *
+     * A quote payload is machine-written and still worth showing — it renders as a price
+     * next to the message that carried it. A candle batch is not: it is several kilobytes
+     * of positional digits whose entire purpose is the chart it ends up drawing, and one
+     * glance at a company now produces five of them. Left in the list they bury the
+     * signals a person actually subscribed for.
+     */
+    val MACHINE_KINDS = setOf(Candles.KIND)
+
+    /** True when this payload is data for the app rather than a message for the reader. */
+    fun isMachine(record: Map<String, String?>): Boolean =
+        isSupported(record) && record["kind"]?.trim()?.lowercase(Locale.US) in MACHINE_KINDS
+
     fun fromFlat(record: Map<String, String?>): DeskPayload? {
         if (!isSupported(record)) return null
         if (record["kind"]?.trim()?.lowercase(Locale.US) in NON_QUOTE_KINDS) return null

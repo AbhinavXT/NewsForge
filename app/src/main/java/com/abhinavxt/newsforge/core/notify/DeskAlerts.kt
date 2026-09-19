@@ -48,6 +48,11 @@ object DeskAlerts {
             // signal. Announcing prices would train the reader to dismiss the channel,
             // which costs the actual signals their only advantage.
             .filter { it.payloads.isEmpty() }
+            // And never the app's own data. `payloads` is empty for a candle batch — the
+            // quote decoder correctly refuses it — so without this the only thing keeping
+            // five kilobytes of digits off the lock screen is the sender having chosen a
+            // low priority.
+            .filterNot { it.machine }
             .filter { it.id !in alreadyNotified }
             .filter { nowMillis - it.receivedAtMillis <= MAX_AGE_MS }
             .sortedByDescending { it.receivedAtMillis }

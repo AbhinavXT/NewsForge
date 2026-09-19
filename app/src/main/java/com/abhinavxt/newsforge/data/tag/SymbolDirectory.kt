@@ -20,18 +20,27 @@ import kotlinx.coroutines.withContext
  */
 class SymbolDirectory(
     private val context: Context,
-    private val computeDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    /**
+     * IO, not Default, and the distinction matters more than it looks.
+     *
+     * The first search reads the cached NSE list off disk and parses a few thousand rows
+     * inside a lock. Done on Default, that occupies one of a small pool of threads that
+     * the feed's own state is assembled on — so the first keystroke in the search box
+     * could stall the recomposition that was supposed to render it, and the box appeared
+     * not to accept typing. It is file work with a parse attached; it belongs on IO.
+     */
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
 
     /**
      * @return ranked matches, best first, or empty for a query too short to mean anything.
      *
-     *   On the compute dispatcher because the first call parses the cached NSE list —
-     *   a few thousand rows — and a reader typing into a search box is by definition
-     *   watching the frame it would otherwise block.
+     *   Off the main thread because the first call parses the cached NSE list — a few
+     *   thousand rows — and a reader typing into a search box is by definition watching
+     *   the frame it would otherwise block.
      */
     suspend fun search(query: String, limit: Int = 6): List<SymbolEntry> =
-        withContext(computeDispatcher) {
+        withContext(ioDispatcher) {
             SymbolSearch.search(SymbolLexiconProvider.entries(context), query, limit)
         }
 }

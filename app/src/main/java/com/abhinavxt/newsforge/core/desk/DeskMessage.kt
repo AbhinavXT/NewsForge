@@ -29,6 +29,15 @@ data class DeskMessage(
      * handles the common case has to know the batch exists.
      */
     val payloads: List<DeskPayload> = emptyList(),
+    /**
+     * This message is data for the app, not something to show or announce.
+     *
+     * Decided from the payload's own kind rather than from its priority, because priority
+     * is the sender's opinion and this is a fact about the content. A desk that forgets to
+     * mark a candle batch low-priority should not be able to push five kilobytes of digits
+     * into the reader's list, or onto their lock screen.
+     */
+    val machine: Boolean = false,
 ) {
     /** The first payload, for callers that only ever expect one. */
     val payload: DeskPayload? get() = payloads.firstOrNull()

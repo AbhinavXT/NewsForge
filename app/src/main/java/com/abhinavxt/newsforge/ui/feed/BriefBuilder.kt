@@ -44,6 +44,9 @@ object BriefBuilder {
     private val GROUP_ORDER = listOf(
         CategoryGroup.MOVERS,
         CategoryGroup.RESULTS,
+        // After the things that happened, before the context. A broker's view is worth
+        // reading once the facts are in and is not worth leading with.
+        CategoryGroup.VIEWS,
         CategoryGroup.POLICY,
         CategoryGroup.GLOBAL,
         CategoryGroup.OTHER,

@@ -36,6 +36,21 @@ enum class Category(
     /** Credit rating upgrade / downgrade / watch. */
     RATING("Rating", 1.3, CategoryGroup.MOVERS),
 
+    /**
+     * A broker's price target, rating call or coverage note on a stock.
+     *
+     * Kept apart from [RATING], which is a credit agency's verdict on a company's debt —
+     * a different question, from a different body, with different consequences. Sharing
+     * a bucket would put "CRISIL downgrades to A-" next to "Jefferies sees 30% upside"
+     * under one heading.
+     *
+     * Weighted below every category that describes something that actually happened. A
+     * broker raising a target is an opinion about a company; an order win is the company.
+     * They routinely move a stock more than the events do, which is a fact about the
+     * market rather than a reason to rank them as news.
+     */
+    PRICE_TARGET("Target", 1.1, CategoryGroup.VIEWS),
+
     /** CEO/CFO/MD appointment or exit, board changes. */
     MANAGEMENT("Management", 1.2, CategoryGroup.MOVERS),
 
@@ -65,6 +80,15 @@ enum class Category(
 enum class CategoryGroup(val label: String) {
     MOVERS("Movers"),
     RESULTS("Results"),
+
+    /**
+     * Somebody's opinion about a stock rather than news about it.
+     *
+     * Its own bucket so the Movers section stays things that happened. A reader
+     * skimming for what changed should not have to sort a regulatory probe from a
+     * brokerage note, and a reader who wants the notes can now filter to them.
+     */
+    VIEWS("Calls"),
     POLICY("Policy"),
     GLOBAL("Global"),
     OTHER("General"),

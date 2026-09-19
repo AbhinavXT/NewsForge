@@ -78,9 +78,18 @@ class DeskRepository(
     private val computeDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
 
+    /**
+     * The desk log, as a person would want to read it.
+     *
+     * Machine payloads are dropped here rather than at the screen, because every consumer
+     * of this wants the same thing: candle batches are stored by [sync] on the way past
+     * and have no business in a list of messages. Reading over the limit first so that
+     * filtering does not quietly shorten the log — five candle messages should not cost
+     * five signals off the bottom.
+     */
     fun recent(limit: Int = 200): Flow<List<DeskMessage>> =
-        deskDao.observeRecent(limit)
-            .map { rows -> rows.map { it.toDomain() } }
+        deskDao.observeRecent(limit * 2)
+            .map { rows -> rows.map { it.toDomain() }.filterNot { it.machine }.take(limit) }
             .flowOn(computeDispatcher)
 
     /**
@@ -313,4 +322,5 @@ private fun DeskMessageEntity.toDomain(): DeskMessage = DeskMessage(
     clickUrl = clickUrl,
     receivedAtMillis = receivedAt,
     payloads = com.abhinavxt.newsforge.data.net.NtfyJson.parseQuotes(body),
+    machine = com.abhinavxt.newsforge.data.net.NtfyJson.isMachinePayload(body),
 )

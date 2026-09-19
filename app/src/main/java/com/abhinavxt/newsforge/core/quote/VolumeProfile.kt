@@ -5,6 +5,27 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime
 
+/** One remembered mark: cumulative volume for a symbol at a point in a session. */
+data class VolumeSample(
+    val symbol: String,
+    val sessionDay: Long,
+    val bucket: Int,
+    val volume: Double,
+)
+
+/**
+ * Today's volume against a normal session, mark by mark.
+ *
+ * Both series are indexed by bucket and the same length, with null where nothing is known
+ * — today is null for marks the session has not reached yet, which is what lets the chart
+ * stop the line where the day has actually got to instead of drawing it to zero.
+ */
+data class VolumeCurve(
+    val today: List<Double?>,
+    val typical: List<Double?>,
+    val priorSessions: Int,
+)
+
 /** How much a name is trading against its own normal, at this point in the session. */
 enum class VolumeLevel {
     /** Nothing worth saying. */
@@ -100,6 +121,69 @@ object VolumeProfile {
         ratio >= HEAVY_RATIO -> VolumeLevel.HEAVY
         ratio >= ACTIVE_RATIO -> VolumeLevel.ACTIVE
         else -> VolumeLevel.ORDINARY
+    }
+
+    /**
+     * Marks in a full session: 09:15 to 15:30 is 375 minutes.
+     *
+     * Derived rather than written down, so a change to the exchange's hours moves the
+     * chart with everything else.
+     */
+    val BUCKETS: Int =
+        (MarketClock.CLOSE_TIME.toSecondOfDay() - MarketClock.OPEN_TIME.toSecondOfDay()) /
+            60 / BUCKET_MINUTES
+
+    /**
+     * Today's cumulative volume against what a normal session looks like by the same mark.
+     *
+     * The single ratio [relative] returns says how busy a stock is; this says *when* it
+     * got busy, which is a different fact and often the more useful one. Volume that
+     * arrived in the first twenty minutes and then stopped is a reaction to something
+     * overnight; the same total accumulated steadily through the afternoon is not, and a
+     * ratio of 2.1 describes both identically.
+     */
+    fun curve(
+        samples: List<VolumeSample>,
+        todayDay: Long,
+    ): VolumeCurve? {
+        if (samples.isEmpty()) return null
+        val today = arrayOfNulls<Double>(BUCKETS)
+        // Prior sessions collected per mark, so each point is a median of the same moment
+        // in the day rather than of the day as a whole.
+        val prior = Array(BUCKETS) { ArrayList<Double>() }
+
+        for (sample in samples) {
+            val bucket = sample.bucket
+            if (bucket !in 0 until BUCKETS) continue
+            if (sample.sessionDay == todayDay) {
+                today[bucket] = sample.volume
+            } else if (sample.volume > 0.0) {
+                prior[bucket] += sample.volume
+            }
+        }
+
+        val sessions = samples.asSequence()
+            .filter { it.sessionDay != todayDay }
+            .map { it.sessionDay }
+            .distinct()
+            .count()
+        if (sessions < MIN_PRIOR_SESSIONS) return null
+
+        val typical = prior.map { values ->
+            if (values.size < MIN_PRIOR_SESSIONS) null else median(values)
+        }
+        if (typical.all { it == null }) return null
+        return VolumeCurve(today = today.toList(), typical = typical, priorSessions = sessions)
+    }
+
+    private fun median(values: List<Double>): Double {
+        val sorted = values.sorted()
+        val middle = sorted.size / 2
+        return if (sorted.size % 2 == 1) {
+            sorted[middle]
+        } else {
+            (sorted[middle - 1] + sorted[middle]) / 2.0
+        }
     }
 
     /** "3.2x" — fixed to one decimal so a column of them lines up under the mono face. */

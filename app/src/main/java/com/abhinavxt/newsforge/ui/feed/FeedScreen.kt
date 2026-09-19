@@ -35,6 +35,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -161,14 +162,9 @@ fun FeedScreen(
         Column(Modifier.padding(padding).fillMaxSize()) {
             if (ready != null) {
                 if (searching) {
-                    OutlinedTextField(
-                        value = ready.filter.query,
-                        onValueChange = onQueryChange,
-                        label = { Text("Search headlines and tickers") },
-                        singleLine = true,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                    SearchField(
+                        query = ready.filter.query,
+                        onQueryChange = onQueryChange,
                     )
                 }
                 ready.filter.sector?.let { sector ->
@@ -706,4 +702,50 @@ private fun CompanyRow(entry: SymbolEntry, onClick: () -> Unit) {
             color = Chalk500,
         )
     }
+}
+
+/**
+ * The search box, holding its own text.
+ *
+ * A text field whose `value` comes back from a view model is only correct when the round
+ * trip is synchronous, and this one is not: a keystroke goes through `setQuery`, a
+ * four-way `combine`, `flowOn(Dispatchers.Default)` and `stateIn` before it can be
+ * rendered. Compose draws whatever `value` says at that moment, so anything slow upstream
+ * shows up as dropped characters — and something slow enough shows up as a field that
+ * will not accept typing at all.
+ *
+ * So the field owns the text and reports it outward. The view model stays the source of
+ * truth for the *filter*; this is only the source of truth for what is currently typed,
+ * which is a different thing and has always belonged here.
+ *
+ * External changes are still adopted — the Clear-filters button and closing the search
+ * icon both empty the query from elsewhere and the box has to follow. But only changes
+ * that did not originate here: the view model echoes each keystroke back, and adopting
+ * those would be the original bug again, one step removed. Type "abc" quickly and the
+ * echo of "a" would arrive while the box holds "abc" and truncate it. So the last value
+ * sent out is remembered, and anything matching it is this field hearing itself.
+ */
+@Composable
+private fun SearchField(query: String, onQueryChange: (String) -> Unit) {
+    var text by rememberSaveable { mutableStateOf(query) }
+    var lastSent by rememberSaveable { mutableStateOf(query) }
+    LaunchedEffect(query) {
+        if (query != lastSent) {
+            text = query
+            lastSent = query
+        }
+    }
+    OutlinedTextField(
+        value = text,
+        onValueChange = {
+            text = it
+            lastSent = it
+            onQueryChange(it)
+        },
+        label = { Text("Search headlines and tickers") },
+        singleLine = true,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+    )
 }
