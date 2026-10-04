@@ -190,9 +190,14 @@ fun NewsForgeRoot(
     // The catch-up queue, as cluster ids, fixed when it starts. Saveable so a rotation
     // mid-session keeps the reader on the same card of the same pile.
     var catchUpIds by rememberSaveable { mutableStateOf(listOf<String>()) }
+    // The reader only understands HTML articles; files go straight to the browser.
+    val openLink: (String) -> Unit = { link ->
+        if (Links.isFile(link)) Links.open(context, link)
+        else nav = Nav.push(nav, Detail.Reader(link))
+    }
     val openStory: (ScoredArticle) -> Unit = { scored ->
         feedViewModel.onStoryOpened(scored.article.clusterId)
-        nav = Nav.push(nav, Detail.Reader(scored.article.link))
+        openLink(scored.article.link)
     }
 
     // A tapped event reminder lands on the company's timeline. Consumed immediately so
@@ -207,7 +212,8 @@ fun NewsForgeRoot(
     // A tapped story alert opens the article in the reader, on top of the news tab.
     LaunchedEffect(openStoryLink) {
         openStoryLink?.let {
-            nav = Nav.pushOn(nav, Tab.NEWS, Detail.Reader(it))
+            if (Links.isFile(it)) Links.open(context, it)
+            else nav = Nav.pushOn(nav, Tab.NEWS, Detail.Reader(it))
             onStoryLinkConsumed()
         }
     }
@@ -335,7 +341,7 @@ fun NewsForgeRoot(
                             },
                             onToggleSave = readerViewModel::toggleSaved,
                             onOpenSymbol = pushSymbol,
-                            onOpenCoverage = { link -> nav = Nav.push(nav, Detail.Reader(link)) },
+                            onOpenCoverage = openLink,
                             onSettingsChange = readerViewModel::updateSettings,
                             onPositionChange = readerViewModel::savePosition,
                             onRetry = readerViewModel::retry,
@@ -357,7 +363,7 @@ fun NewsForgeRoot(
                             prices = ready?.prices ?: PriceBook(),
                             onRead = { scored ->
                                 feedViewModel.onStoryOpened(scored.article.clusterId)
-                                nav = Nav.push(nav, Detail.Reader(scored.article.link))
+                                openLink(scored.article.link)
                             },
                             onMarkRead = { scored ->
                                 feedViewModel.onStoryOpened(scored.article.clusterId)

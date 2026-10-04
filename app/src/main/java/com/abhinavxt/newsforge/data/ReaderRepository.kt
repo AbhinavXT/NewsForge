@@ -31,6 +31,12 @@ sealed interface ReaderResult {
      */
     data class NotReadable(val url: String) : ReaderResult
 
+    /**
+     * The link is a file, not a page — a PDF or a deck behind a URL that did not say so.
+     * Nothing to extract; the screen hands [url] to the browser.
+     */
+    data class NotAPage(val url: String) : ReaderResult
+
     data class Failed(val message: String) : ReaderResult
 }
 
@@ -67,6 +73,15 @@ class ReaderRepository(
         val target = resolve(url)
             ?: return ReaderResult.Failed("Couldn't find the publisher's page")
         val result = fetcher.fetch(target, validators = null, accept = ACCEPT_HTML)
+        val contentType = when (result) {
+            is FetchResult.Success -> result.contentType
+            is FetchResult.Failure -> result.contentType
+            is FetchResult.NotModified -> null
+        }
+        // An undeclared type is given the benefit of the doubt: plenty of pages omit it.
+        if (contentType != null && "html" !in contentType.lowercase()) {
+            return ReaderResult.NotAPage(target)
+        }
         val bytes = when (result) {
             is FetchResult.Success -> result.bytes
             is FetchResult.Failure -> return ReaderResult.Failed(

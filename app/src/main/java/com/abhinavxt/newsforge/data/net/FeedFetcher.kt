@@ -20,21 +20,38 @@ import kotlin.coroutines.resume
 /** Outcome of one feed poll. */
 sealed interface FetchResult {
 
-    /** Body downloaded. [validators] are stored for the next poll. */
-    data class Success(val bytes: ByteArray, val validators: CacheValidators) : FetchResult {
+    /**
+     * Body downloaded. [validators] are stored for the next poll.
+     *
+     * @param contentType the declared media type, `type/subtype` with no parameters.
+     */
+    data class Success(
+        val bytes: ByteArray,
+        val validators: CacheValidators,
+        val contentType: String? = null,
+    ) : FetchResult {
         // ByteArray in a data class needs these; the generated ones compare references.
         override fun equals(other: Any?): Boolean =
             this === other || (other is Success && bytes.contentEquals(other.bytes) &&
-                validators == other.validators)
+                validators == other.validators && contentType == other.contentType)
 
-        override fun hashCode(): Int = 31 * bytes.contentHashCode() + validators.hashCode()
+        override fun hashCode(): Int =
+            31 * (31 * bytes.contentHashCode() + validators.hashCode()) + contentType.hashCode()
     }
 
     /** Server confirmed nothing changed. Cheapest possible poll. */
     data class NotModified(val validators: CacheValidators) : FetchResult
 
-    /** @param status HTTP status, or -1 when the request never completed. */
-    data class Failure(val status: Int, val message: String) : FetchResult
+    /**
+     * @param status HTTP status, or -1 when the request never completed.
+     * @param contentType the declared media type, when the server got as far as sending
+     *   one — a body refused for size is often a file the caller should not want anyway.
+     */
+    data class Failure(
+        val status: Int,
+        val message: String,
+        val contentType: String? = null,
+    ) : FetchResult
 }
 
 /**
@@ -181,21 +198,24 @@ class FeedFetcher(private val client: OkHttpClient) {
             }
 
             val body = response.body ?: return FetchResult.Failure(response.code, "Empty body")
+            val type = body.contentType()?.let { "${it.type}/${it.subtype}" }
             // Declared length first, so an honest server saves us the download entirely.
             if (HttpCache.isTooLarge(body.contentLength().takeIf { it >= 0 })) {
-                return FetchResult.Failure(response.code, "Body larger than the feed limit")
+                return FetchResult.Failure(response.code, "Body larger than the feed limit", type)
             }
             val bytes = try {
                 // Then the real limit, because a chunked response declares nothing.
                 HttpCache.readBounded(body.byteStream())
-                    ?: return FetchResult.Failure(response.code, "Body larger than the feed limit")
+                    ?: return FetchResult.Failure(
+                        response.code, "Body larger than the feed limit", type,
+                    )
             } catch (e: IOException) {
                 return FetchResult.Failure(response.code, e.message ?: "Read failed")
             }
             if (bytes.isEmpty()) {
                 return FetchResult.Failure(response.code, "Empty body")
             }
-            FetchResult.Success(bytes, fresh)
+            FetchResult.Success(bytes, fresh, type)
         }
 
     companion object {

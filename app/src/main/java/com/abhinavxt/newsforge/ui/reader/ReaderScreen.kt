@@ -211,6 +211,16 @@ fun ReaderScreen(
                         onOpenCoverage = onOpenCoverage,
                         onPositionChange = onPositionChange,
                     )
+                    // A file, not a page: the reader has no business showing it, so it
+                    // goes to the browser and steps out of the way, leaving the feed
+                    // underneath for when the reader comes back.
+                    is ReaderResult.NotAPage -> {
+                        ReaderSkeleton()
+                        LaunchedEffect(result) {
+                            onOpenInBrowser(result.url)
+                            onBack()
+                        }
+                    }
                     is ReaderResult.NotReadable -> EmptyState(
                         icon = R.drawable.ic_news,
                         title = "This page can't be shown in the reader",

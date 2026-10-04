@@ -34,5 +34,25 @@ object Links {
         }
     }
 
+    /**
+     * Whether [url] names a file rather than a page — a PDF, a slide deck, a filing.
+     *
+     * The reader extracts HTML and has nothing to show for these, so callers send them
+     * straight to [open]. Judged by extension, which is free; links that hide their type
+     * behind a script URL are caught later by the reader's content-type check.
+     */
+    fun isFile(url: String): Boolean {
+        val path = runCatching { Uri.parse(url) }.getOrNull()?.path ?: return false
+        val extension = path.substringAfterLast('/').substringAfterLast('.', "")
+        return extension.lowercase() in FILE_EXTENSIONS
+    }
+
+    private val FILE_EXTENSIONS = setOf(
+        "pdf", "doc", "docx", "xls", "xlsx", "csv", "ppt", "pptx", "odt", "ods", "odp",
+        "rtf", "txt", "xml", "json", "zip", "rar", "7z", "gz",
+        "jpg", "jpeg", "png", "gif", "webp", "svg",
+        "mp3", "m4a", "wav", "mp4", "m4v", "mov", "webm",
+    )
+
     private const val TAG = "Links"
 }
