@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Notification action glyph; see ic_chart for why these are filled. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M6.00,3.00 L18.00,3.00 L18.00,21.00 L12.00,16.50 L6.00,21.00 Z"
+        android:fillColor="#FFFFFFFF" />
+</vector>

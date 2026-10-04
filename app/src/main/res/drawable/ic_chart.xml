@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Notification action glyph. Filled rather than stroked, unlike the chrome icons:
+    the shade renders these small and monochrome, and 1.8dp line art disappears there.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M4.00,14.00 L7.00,14.00 L7.00,20.00 L4.00,20.00 Z"
+        android:fillColor="#FFFFFFFF" />
+    <path
+        android:pathData="M10.50,8.00 L13.50,8.00 L13.50,20.00 L10.50,20.00 Z"
+        android:fillColor="#FFFFFFFF" />
+    <path
+        android:pathData="M17.00,4.00 L20.00,4.00 L20.00,20.00 L17.00,20.00 Z"
+        android:fillColor="#FFFFFFFF" />
+</vector>

@@ -1,0 +1,61 @@
+# Build and test every push to main and every pull request.
+#
+# Runs the same checks as a local pre-commit pass: the exhaustive-when guard, the JVM
+# unit tests (which include the migration-chain and schema-export checks), and a debug
+# build. The debug APK is kept as an artifact so a PR can be installed and tried.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A newer push to the same branch or PR makes the older run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      # The Gradle daemon is pinned to JDK 25 (gradle/gradle-daemon-jvm.properties).
+      # Installing it here saves Gradle downloading one on every run.
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 25
+
+      # Accepts the SDK licences, so AGP can fetch the compileSdk platform it needs.
+      - uses: android-actions/setup-android@v4
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Check exhaustive whens
+        run: python3 tools/check_exhaustive_when.py
+
+      - name: Unit tests and debug build
+        run: ./gradlew :app:testDebugUnitTest :app:assembleDebug --stacktrace
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports
+          path: app/build/reports/tests/
+          retention-days: 14
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: newsforge-debug-${{ github.sha }}
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 14

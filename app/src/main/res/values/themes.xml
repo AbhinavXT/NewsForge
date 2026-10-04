@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+        Dark, and matching the Compose background exactly. The template's Light theme
+        flashes white for a frame before Compose draws, which on a feed opened in the dark
+        at 08:15 is genuinely unpleasant.
+    -->
+    <style name="Theme.NewsForge" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/ink900</item>
+        <item name="android:statusBarColor">@color/ink900</item>
+        <item name="android:navigationBarColor">@color/ink900</item>
+    </style>
+</resources>

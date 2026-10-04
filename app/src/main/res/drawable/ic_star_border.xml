@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Drawn in-project rather than pulled from material-icons: the app needs ten
+    glyphs, not a thousand, and these are tinted at the call site by Icon().
+    Stroked line art at 1.8dp, to sit with the rest of the chrome rather than
+    compete with the category accents, which are the only colour that means
+    anything here.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M12.00,3.40 L14.35,8.96 L20.37,9.48 L15.80,13.44 L17.17,19.32 L12.00,16.20 L6.83,19.32 L8.20,13.44 L3.63,9.48 L9.65,8.96 Z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

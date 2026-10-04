@@ -1,0 +1,126 @@
+# Builds a signed release and publishes it as a GitHub Release when a version tag is
+# pushed. Tags are made by tools/release.sh; pushing one by hand works the same way.
+#
+# The version comes from the tag: v1.4.2 becomes versionName 1.4.2 and versionCode
+# 10402 (major * 10000 + minor * 100 + patch), so minor and patch must stay below 100.
+#
+# One-time setup — repository secrets (Settings > Secrets and variables > Actions):
+#   NEWSFORGE_KEYSTORE_BASE64    the upload keystore, base64:  base64 -i release.jks | pbcopy
+#   NEWSFORGE_KEYSTORE_PASSWORD  the keystore password
+#   NEWSFORGE_KEY_ALIAS          the key alias inside it
+#   NEWSFORGE_KEY_PASSWORD       the key password
+#
+# Create the keystore once and keep it somewhere safe; every future update has to be
+# signed with the same key or Android refuses to install it over the old one:
+#   keytool -genkeypair -v -keystore release.jks -alias newsforge \
+#     -keyalg RSA -keysize 4096 -validity 10000
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Read version from tag
+        id: version
+        run: |
+          tag="$GITHUB_REF_NAME"
+          if [[ ! "$tag" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "::error::Tag '$tag' is not of the form vMAJOR.MINOR.PATCH"
+            exit 1
+          fi
+          major=${BASH_REMATCH[1]} minor=${BASH_REMATCH[2]} patch=${BASH_REMATCH[3]}
+          if (( minor > 99 || patch > 99 )); then
+            echo "::error::Minor and patch must be below 100 to fit the versionCode scheme"
+            exit 1
+          fi
+          echo "name=$major.$minor.$patch" >> "$GITHUB_OUTPUT"
+          echo "code=$(( major * 10000 + minor * 100 + patch ))" >> "$GITHUB_OUTPUT"
+
+      # Checked up front so a missing secret fails in seconds with instructions, not after
+      # a fifteen-minute build with an unsigned APK nobody can install.
+      - name: Check signing secrets
+        env:
+          KEYSTORE_BASE64: ${{ secrets.NEWSFORGE_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.NEWSFORGE_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.NEWSFORGE_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.NEWSFORGE_KEY_PASSWORD }}
+        run: |
+          missing=()
+          [[ -n "$KEYSTORE_BASE64" ]] || missing+=(NEWSFORGE_KEYSTORE_BASE64)
+          [[ -n "$KEYSTORE_PASSWORD" ]] || missing+=(NEWSFORGE_KEYSTORE_PASSWORD)
+          [[ -n "$KEY_ALIAS" ]] || missing+=(NEWSFORGE_KEY_ALIAS)
+          [[ -n "$KEY_PASSWORD" ]] || missing+=(NEWSFORGE_KEY_PASSWORD)
+          if (( ${#missing[@]} )); then
+            echo "::error::Missing repository secrets: ${missing[*]} (see the header of release.yml)"
+            exit 1
+          fi
+
+      - name: Decode keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.NEWSFORGE_KEYSTORE_BASE64 }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          echo "NEWSFORGE_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - uses: android-actions/setup-android@v4
+
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          # Release builds read the cache CI wrote but never write their own.
+          cache-read-only: true
+
+      - name: Check exhaustive whens
+        run: python3 tools/check_exhaustive_when.py
+
+      - name: Test and build release
+        env:
+          NEWSFORGE_KEYSTORE_PASSWORD: ${{ secrets.NEWSFORGE_KEYSTORE_PASSWORD }}
+          NEWSFORGE_KEY_ALIAS: ${{ secrets.NEWSFORGE_KEY_ALIAS }}
+          NEWSFORGE_KEY_PASSWORD: ${{ secrets.NEWSFORGE_KEY_PASSWORD }}
+        run: >
+          ./gradlew :app:testDebugUnitTest :app:assembleRelease :app:bundleRelease
+          -PversionName=${{ steps.version.outputs.name }}
+          -PversionCode=${{ steps.version.outputs.code }}
+          --stacktrace
+
+      - name: Verify signature and collect files
+        run: |
+          apksigner=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
+          "$apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk
+          mkdir dist
+          cp app/build/outputs/apk/release/app-release.apk "dist/NewsForge-$GITHUB_REF_NAME.apk"
+          cp app/build/outputs/bundle/release/app-release.aab "dist/NewsForge-$GITHUB_REF_NAME.aab"
+          (cd dist && sha256sum * > SHA256SUMS)
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --verify-tag \
+            --title "NewsForge $GITHUB_REF_NAME" \
+            --generate-notes
+
+      - name: Remove keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks"
