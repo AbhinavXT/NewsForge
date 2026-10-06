@@ -282,7 +282,7 @@ fun StorySheet(
  * by reading the names.
  */
 @Composable
-private fun Outlets(article: ArticleSummary) {
+internal fun Outlets(article: ArticleSummary) {
     val outlets = StoryPresentation.outlets(article)
     SheetLabel(if (outlets.size > 1) "Carried by ${outlets.size} outlets" else "Source")
     FlowRow(
@@ -395,7 +395,7 @@ private fun SymbolExposure(
 
 /** A small caps label opening one block of the sheet. */
 @Composable
-private fun SheetLabel(text: String) {
+internal fun SheetLabel(text: String) {
     Text(
         text = text.uppercase(),
         style = MaterialTheme.typography.labelSmall,
@@ -414,7 +414,7 @@ private fun SheetLabel(text: String) {
  * that this headline caused anything.
  */
 @Composable
-private fun ReactionBanner(reaction: Reaction, publishedAt: Long, nowMillis: Long) {
+internal fun ReactionBanner(reaction: Reaction, publishedAt: Long, nowMillis: Long) {
     val rising = reaction.percent >= 0
     val elapsed = RelativeTime.ago(publishedAt, nowMillis)
     Row(
@@ -461,7 +461,7 @@ private fun ReactionBanner(reaction: Reaction, publishedAt: Long, nowMillis: Lon
  * out of place, and then it deserves a full answer rather than a hint.
  */
 @Composable
-private fun RankExplainer(article: ArticleSummary, nowMillis: Long) {
+internal fun RankExplainer(article: ArticleSummary, nowMillis: Long) {
     var expanded by remember(article.id) { mutableStateOf(false) }
     val explanation = remember(article.id, nowMillis) {
         Ranker.explain(
@@ -542,7 +542,7 @@ private fun RankExplainer(article: ArticleSummary, nowMillis: Long) {
  * agree or disagree with, and a column of coefficients is not.
  */
 @Composable
-private fun LearnedExplainer(moveProbability: Double, drivers: List<String>) {
+internal fun LearnedExplainer(moveProbability: Double, drivers: List<String>) {
     Column(
         Modifier
             .fillMaxWidth()

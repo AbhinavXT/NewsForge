@@ -5,6 +5,7 @@ package com.abhinavxt.newsforge.ui.feed
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
@@ -13,12 +14,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -38,6 +41,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.abhinavxt.newsforge.R
+import com.abhinavxt.newsforge.core.tag.Sector
+import com.abhinavxt.newsforge.data.model.ArticleSummary
 import com.abhinavxt.newsforge.data.model.ScoredArticle
 import com.abhinavxt.newsforge.ui.components.EmptyState
 import com.abhinavxt.newsforge.ui.components.NfCard
@@ -46,7 +51,9 @@ import com.abhinavxt.newsforge.ui.components.PrimaryButton
 import com.abhinavxt.newsforge.ui.components.ScreenGutter
 import com.abhinavxt.newsforge.ui.components.ScreenHeader
 import com.abhinavxt.newsforge.ui.components.TonalButton
+import com.abhinavxt.newsforge.ui.chart.Sparkline
 import com.abhinavxt.newsforge.ui.theme.Chalk500
+import com.abhinavxt.newsforge.ui.theme.Hairline
 import com.abhinavxt.newsforge.ui.theme.QuoteDown
 import com.abhinavxt.newsforge.ui.theme.QuoteUp
 import com.abhinavxt.newsforge.ui.util.RelativeTime
@@ -160,81 +167,20 @@ private fun CatchUpCard(
     val article = scored.article
     Column(Modifier.fillMaxSize().padding(vertical = 12.dp)) {
         NfCard(Modifier.weight(1f), contentPadding = PaddingValues(20.dp)) {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+            // The card owns the whole page, and a headline with two lines of summary fills
+            // a third of it. Pinning the context to the bottom keeps the story where the eye
+            // lands first and puts the evidence beside the buttons that act on it, instead
+            // of leaving a blank slab between them. Still scrolls when a long story needs
+            // more than the screen.
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                Column(
+                    Modifier
+                        .verticalScroll(rememberScrollState())
+                        .heightIn(min = maxHeight),
+                    verticalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Pill(article.category.label, article.category.accent, dot = true)
-                    Text(
-                        text = RelativeTime.byline(
-                            article.sourceName,
-                            article.otherSources.size,
-                            article.publishedAt,
-                            nowMillis,
-                        ),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Chalk500,
-                        maxLines = 1,
-                    )
-                }
-                Text(
-                    text = article.title,
-                    style = MaterialTheme.typography.titleLarge.copy(fontSize = 24.sp, lineHeight = 31.sp),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(top = 16.dp),
-                )
-                StoryPresentation.summaryOrNull(article)?.let { summary ->
-                    Text(
-                        text = summary,
-                        style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 14.dp),
-                    )
-                }
-                if (article.symbols.isNotEmpty()) {
-                    FlowRow(
-                        Modifier.padding(top = 18.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        for (symbol in article.symbols.take(6)) {
-                            val change = prices[symbol]?.changePercent
-                            Row(
-                                Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                                    .clickable { onOpenSymbol(symbol) }
-                                    .padding(horizontal = 9.dp, vertical = 5.dp),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            ) {
-                                Text(
-                                    text = symbol,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                if (change != null) {
-                                    Text(
-                                        text = StoryPresentation.changeLabel(change),
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontFamily = FontFamily.Monospace,
-                                        color = if (change < 0) QuoteDown else QuoteUp,
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-                prices.reactionFor(article)?.let { reaction ->
-                    val rising = reaction.percent >= 0
-                    Text(
-                        text = "${reaction.symbol} ${StoryPresentation.changeLabel(reaction.percent)} " +
-                            "since this was published",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (rising) QuoteUp else QuoteDown,
-                        modifier = Modifier.padding(top = 12.dp),
-                    )
+                    StoryHead(article, nowMillis)
+                    StoryContext(scored, nowMillis, prices, onOpenSymbol)
                 }
             }
         }
@@ -264,5 +210,121 @@ private fun CatchUpCard(
                 modifier = Modifier.weight(1f),
             )
         }
+    }
+}
+
+@Composable
+private fun StoryHead(article: ArticleSummary, nowMillis: Long) {
+    Column {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Pill(article.category.label, article.category.accent, dot = true)
+            Text(
+                text = RelativeTime.byline(
+                    article.sourceName,
+                    article.otherSources.size,
+                    article.publishedAt,
+                    nowMillis,
+                ),
+                style = MaterialTheme.typography.labelSmall,
+                color = Chalk500,
+                maxLines = 1,
+            )
+        }
+        Text(
+            text = article.title,
+            style = MaterialTheme.typography.titleLarge.copy(fontSize = 24.sp, lineHeight = 31.sp),
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = 16.dp),
+        )
+        StoryPresentation.summaryOrNull(article)?.let { summary ->
+            Text(
+                text = summary,
+                style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 14.dp),
+            )
+        }
+    }
+}
+
+/**
+ * The same evidence the story sheet gives — why it ranked, what the price did, who else
+ * carried it — so deciding whether to open a story does not mean leaving catch-up.
+ */
+@Composable
+private fun StoryContext(
+    scored: ScoredArticle,
+    nowMillis: Long,
+    prices: PriceBook,
+    onOpenSymbol: (String) -> Unit,
+) {
+    val article = scored.article
+    Column(Modifier.padding(top = 24.dp)) {
+        HorizontalDivider(color = Hairline)
+
+        if (scored.moveProbability != null) {
+            LearnedExplainer(scored.moveProbability, scored.drivers)
+        } else {
+            RankExplainer(article, nowMillis)
+        }
+
+        prices.reactionFor(article)?.let { reaction ->
+            ReactionBanner(reaction, article.publishedAt, nowMillis)
+            Sparkline(
+                samples = prices.samples[reaction.symbol].orEmpty(),
+                markerAtMillis = article.publishedAt,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+
+        if (article.symbols.isNotEmpty()) {
+            SheetLabel("Companies")
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                for (symbol in article.symbols.take(6)) {
+                    val change = prices[symbol]?.changePercent
+                    Row(
+                        Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .clickable { onOpenSymbol(symbol) }
+                            .padding(horizontal = 9.dp, vertical = 5.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(
+                            text = symbol,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        if (change != null) {
+                            Text(
+                                text = StoryPresentation.changeLabel(change),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontFamily = FontFamily.Monospace,
+                                color = if (change < 0) QuoteDown else QuoteUp,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        val sectors = article.sectors.mapNotNull { Sector.parse(it) }
+        if (sectors.isNotEmpty()) {
+            SheetLabel("Sectors")
+            Text(
+                text = sectors.joinToString(" · ") { it.label },
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        Outlets(article)
     }
 }
