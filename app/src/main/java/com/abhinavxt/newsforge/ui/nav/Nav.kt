@@ -2,7 +2,11 @@ package com.abhinavxt.newsforge.ui.nav
 
 /** Top-level destinations, one per bottom-bar entry. */
 enum class Tab(val label: String) {
-    NEWS("News"),
+    /** The market feed. Named for what it covers now that there is a second news tab. */
+    NEWS("Markets"),
+
+    /** General news — politics, science, international — kept apart from the markets. */
+    WORLD("World"),
     CALENDAR("Calendar"),
     DESK("Desk"),
     FEEDS("Feeds"),

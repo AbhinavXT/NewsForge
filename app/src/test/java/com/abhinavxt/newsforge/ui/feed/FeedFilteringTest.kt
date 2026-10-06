@@ -92,7 +92,7 @@ class FeedFilteringTest {
         assertEquals(1, counts[CategoryGroup.GLOBAL])
         assertEquals(0, counts[CategoryGroup.OTHER])
         // Every group is present as a key even at zero, so the chip row is stable.
-        assertEquals(CategoryGroup.entries.size, counts.size)
+        assertEquals(CategoryGroup.MARKETS.size, counts.size)
     }
 
     @Test

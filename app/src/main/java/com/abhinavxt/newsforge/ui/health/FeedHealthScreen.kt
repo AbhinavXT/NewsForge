@@ -40,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.abhinavxt.newsforge.core.feed.FeedKind
 import com.abhinavxt.newsforge.core.feed.FeedValidation
+import com.abhinavxt.newsforge.core.model.Category
 import com.abhinavxt.newsforge.core.model.SourceTier
 import com.abhinavxt.newsforge.data.db.FeedEntity
 import com.abhinavxt.newsforge.ui.theme.CatOrder
@@ -140,6 +141,10 @@ fun FeedHealthScreen(
     }
 }
 
+/** The world topic a stored hint names, or null for a market feed. */
+private fun worldTopicOf(hint: String): Category? =
+    Category.WORLD_TOPICS.firstOrNull { it.name == hint }
+
 /** Position 1000 so user-added feeds sort after the seeded set. */
 private val BLANK_FEED = FeedEntity(
     id = "",
@@ -197,6 +202,10 @@ private fun FeedRow(
                 Text(
                     text = buildString {
                         append(status)
+                        item.feed.categoryHint?.let(::worldTopicOf)?.let {
+                            append(" · world · ")
+                            append(it.label.lowercase())
+                        }
                         append(" · ")
                         append(item.feed.tier.lowercase())
                         if (item.feed.kind != FeedKind.RSS.name) append(" · json")
@@ -243,6 +252,12 @@ private fun FeedEditor(
     var kind by remember(feed.id) {
         mutableStateOf(FeedKind.entries.firstOrNull { it.name == feed.kind } ?: FeedKind.RSS)
     }
+    // The section is the feed's hint. A world topic puts the feed on the World tab;
+    // anything else is a market feed, and switching back to Markets restores the hint it
+    // came with — a built-in "Results wire" should not lose its prior by visiting Science.
+    val originalMarketHint = feed.categoryHint?.takeUnless { worldTopicOf(it) != null }
+    var hint by remember(feed.id) { mutableStateOf(feed.categoryHint) }
+    val section = hint?.let(::worldTopicOf)
 
     val problem = FeedValidation.validate(name, url, existingUrls)
 
@@ -277,6 +292,30 @@ private fun FeedEditor(
                             label = option.label,
                             selected = kind == option,
                             onClick = { kind = option },
+                        )
+                    }
+                }
+                Text(
+                    text = "Section",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Chalk500,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+                FlowRow(
+                    Modifier.padding(top = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    NfChip(
+                        label = "Markets",
+                        selected = section == null,
+                        onClick = { hint = originalMarketHint },
+                    )
+                    for (topic in Category.WORLD_TOPICS) {
+                        NfChip(
+                            label = topic.label,
+                            selected = section == topic,
+                            onClick = { hint = topic.name },
                         )
                     }
                 }
@@ -321,6 +360,7 @@ private fun FeedEditor(
                             url = normalized,
                             tier = tier,
                             kind = kind.name,
+                            categoryHint = hint,
                         )
                     )
                 },

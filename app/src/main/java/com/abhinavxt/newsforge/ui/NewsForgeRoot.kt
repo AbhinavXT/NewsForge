@@ -91,6 +91,8 @@ import com.abhinavxt.newsforge.ui.desk.DeskViewModel
 import com.abhinavxt.newsforge.ui.feed.FeedScreen
 import com.abhinavxt.newsforge.ui.feed.FeedUiState
 import com.abhinavxt.newsforge.ui.feed.FeedViewModel
+import com.abhinavxt.newsforge.ui.world.WorldScreen
+import com.abhinavxt.newsforge.ui.world.WorldViewModel
 import com.abhinavxt.newsforge.ui.feed.PriceBook
 import com.abhinavxt.newsforge.ui.feed.CatchUpScreen
 import com.abhinavxt.newsforge.ui.health.FeedHealthScreen
@@ -445,6 +447,38 @@ fun NewsForgeRoot(
                             onRefresh = feedViewModel::refresh,
                         )
 
+                        Tab.WORLD -> {
+                            val worldViewModel: WorldViewModel = viewModel(
+                                factory = WorldViewModel.factory(repository, savedArticles),
+                            )
+                            val worldState by worldViewModel.uiState.collectAsStateWithLifecycle()
+                            WorldScreen(
+                                state = worldState,
+                                onOpenStory = { scored ->
+                                    worldViewModel.onStoryOpened(scored.article.clusterId)
+                                    openLink(scored.article.link)
+                                },
+                                onToggleRead = { scored ->
+                                    worldViewModel.setRead(
+                                        scored.article.clusterId,
+                                        !scored.article.read,
+                                    )
+                                },
+                                onToggleSave = { scored ->
+                                    worldViewModel.toggleSaved(
+                                        scored.article.id,
+                                        !scored.article.saved,
+                                    )
+                                },
+                                onSelectTopic = worldViewModel::selectTopic,
+                                onToggleUnread = worldViewModel::toggleUnreadOnly,
+                                onToggleSaved = worldViewModel::toggleSavedOnly,
+                                onQueryChange = worldViewModel::setQuery,
+                                onClearFilters = worldViewModel::clearFilters,
+                                onRefresh = worldViewModel::refresh,
+                            )
+                        }
+
                         Tab.CALENDAR -> {
                             val calendarViewModel: CalendarViewModel =
                                 viewModel(factory = CalendarViewModel.factory(repository))
@@ -756,6 +790,7 @@ private val NavSaver = androidx.compose.runtime.saveable.listSaver<NavState, Str
 @DrawableRes
 private fun tabIcon(tab: Tab): Int = when (tab) {
     Tab.NEWS -> R.drawable.ic_news
+    Tab.WORLD -> R.drawable.ic_globe
     Tab.CALENDAR -> R.drawable.ic_calendar
     Tab.DESK -> R.drawable.ic_desk
     Tab.FEEDS -> R.drawable.ic_feeds

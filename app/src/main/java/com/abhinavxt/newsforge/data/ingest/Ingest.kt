@@ -2,7 +2,7 @@ package com.abhinavxt.newsforge.data.ingest
 
 import com.abhinavxt.newsforge.core.dedupe.Headline
 import com.abhinavxt.newsforge.core.dedupe.UrlCanonicalizer
-import com.abhinavxt.newsforge.core.model.Category
+import com.abhinavxt.newsforge.core.model.Desk
 import com.abhinavxt.newsforge.core.model.FeedSource
 import com.abhinavxt.newsforge.core.model.ParsedItem
 import com.abhinavxt.newsforge.core.tag.Categorizer
@@ -49,7 +49,13 @@ object Ingest {
         val canonicalUrl = UrlCanonicalizer.canonicalize(item.link)
         val text = listOfNotNull(item.title, item.summary).joinToString(" ")
         val published = resolvePublishedAt(item.publishedAtMillis, fetchedAtMillis)
-        val symbols = lexicon.match(text)
+        // A world feed is not tagged with companies. The lexicon would still find some —
+        // a politics story naming a state-run bank, a sports story sponsored by a carmaker
+        // — and each match would drag a general-news story into a company's timeline and
+        // its alerts, which is not what following a stock asks for.
+        val worldTopic = feed.categoryHint?.takeIf { it.desk == Desk.WORLD }
+        val world = worldTopic != null
+        val symbols = if (world) emptyList() else lexicon.match(text)
 
         return NewArticle(
             id = idFor(canonicalUrl),
@@ -63,7 +69,12 @@ object Ingest {
             sourceName = item.sourceName?.takeIf { it.isNotBlank() } ?: feed.name,
             // The item's own hint outranks the text rules, which outrank the feed's.
             // An exchange filing says what it is; a headline has to be read.
-            category = item.categoryHint
+            //
+            // A world feed's topic is final. The text rules only know market events, and
+            // letting "rate", "order" or "probe" pull a science or politics story into the
+            // market feed would move it to the other half of the app.
+            category = worldTopic
+                ?: item.categoryHint
                 ?: Categorizer.categorize(item.title, item.summary, feed.categoryHint),
             tier = feed.tier,
             feedKind = feed.kind,
@@ -75,7 +86,7 @@ object Ingest {
             // Both mechanisms, not either: a story can name a bank and still be about
             // rates, and a duty change names no company at all while being the most
             // important thing that happened to a whole basket.
-            sectors = sectors.sectorsFor(symbols, text).map { it.name },
+            sectors = if (world) emptyList() else sectors.sectorsFor(symbols, text).map { it.name },
         )
     }
 

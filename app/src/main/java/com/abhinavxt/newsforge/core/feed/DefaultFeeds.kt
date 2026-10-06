@@ -190,7 +190,176 @@ object DefaultFeeds {
         ),
     )
 
-    val ALL: List<FeedSource> = QUERY_FEEDS + PUBLISHER_FEEDS + NSE_FEEDS
+    /**
+     * General news for the World tab: politics, science, international and the rest.
+     *
+     * Every one carries a world-desk [Category] as its hint, and that hint is what puts
+     * its stories on the World tab rather than in the market feed — see `Ingest`. A query
+     * feed and at least one publisher feed per topic, for the same reasons as on the
+     * market side: the query is broad, the publisher is fast, and either can rot without
+     * leaving a topic empty.
+     *
+     * Publisher URLs are the well-known public ones and, like the market publishers, are
+     * unverified until the health screen has shown them succeeding. Tiers are WIRE for
+     * the established newsrooms and AGGREGATOR for the query feeds; nothing here is a
+     * primary record in the sense an exchange filing is.
+     */
+    val WORLD_FEEDS: List<FeedSource> = listOf(
+        // India
+        FeedSource(
+            "gn-india", "India top stories",
+            googleNews("India news"),
+            SourceTier.AGGREGATOR, Category.INDIA,
+        ),
+        FeedSource(
+            "hindu-national", "The Hindu National",
+            "https://www.thehindu.com/news/national/feeder/default.rss",
+            SourceTier.WIRE, Category.INDIA,
+        ),
+        FeedSource(
+            "ie-india", "Indian Express India",
+            "https://indianexpress.com/section/india/feed/",
+            SourceTier.WIRE, Category.INDIA,
+        ),
+
+        // Politics
+        FeedSource(
+            "gn-politics", "Politics",
+            googleNews("Lok Sabha OR Parliament OR election OR BJP OR Congress politics"),
+            SourceTier.AGGREGATOR, Category.POLITICS,
+        ),
+        FeedSource(
+            "ie-politics", "Indian Express Politics",
+            "https://indianexpress.com/section/political-pulse/feed/",
+            SourceTier.WIRE, Category.POLITICS,
+        ),
+        FeedSource(
+            "guardian-politics", "The Guardian Politics",
+            "https://www.theguardian.com/politics/rss",
+            SourceTier.WIRE, Category.POLITICS,
+        ),
+
+        // World
+        FeedSource(
+            "gn-world", "World news",
+            googleNews("world news OR international OR UN OR summit OR diplomacy"),
+            SourceTier.AGGREGATOR, Category.WORLD,
+        ),
+        FeedSource(
+            "bbc-world", "BBC World",
+            "https://feeds.bbci.co.uk/news/world/rss.xml",
+            SourceTier.WIRE, Category.WORLD,
+        ),
+        FeedSource(
+            "aljazeera", "Al Jazeera",
+            "https://www.aljazeera.com/xml/rss/all.xml",
+            SourceTier.WIRE, Category.WORLD,
+        ),
+        FeedSource(
+            "guardian-world", "The Guardian World",
+            "https://www.theguardian.com/world/rss",
+            SourceTier.WIRE, Category.WORLD,
+        ),
+        FeedSource(
+            "hindu-international", "The Hindu International",
+            "https://www.thehindu.com/news/international/feeder/default.rss",
+            SourceTier.WIRE, Category.WORLD,
+        ),
+
+        // Science
+        FeedSource(
+            "gn-science", "Science",
+            googleNews("science research OR study OR ISRO OR NASA OR space"),
+            SourceTier.AGGREGATOR, Category.SCIENCE,
+        ),
+        FeedSource(
+            "bbc-science", "BBC Science",
+            "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml",
+            SourceTier.WIRE, Category.SCIENCE,
+        ),
+        FeedSource(
+            "sciencedaily", "ScienceDaily",
+            "https://www.sciencedaily.com/rss/top/science.xml",
+            SourceTier.WIRE, Category.SCIENCE,
+        ),
+        FeedSource(
+            "nasa", "NASA",
+            "https://www.nasa.gov/news-release/feed/",
+            SourceTier.OFFICIAL, Category.SCIENCE,
+        ),
+
+        // Technology
+        FeedSource(
+            "gn-tech", "Technology",
+            googleNews("technology OR AI OR smartphone OR startup OR cybersecurity"),
+            SourceTier.AGGREGATOR, Category.TECHNOLOGY,
+        ),
+        FeedSource(
+            "ars", "Ars Technica",
+            "https://feeds.arstechnica.com/arstechnica/index",
+            SourceTier.WIRE, Category.TECHNOLOGY,
+        ),
+        FeedSource(
+            "verge", "The Verge",
+            "https://www.theverge.com/rss/index.xml",
+            SourceTier.WIRE, Category.TECHNOLOGY,
+        ),
+
+        // Health
+        FeedSource(
+            "gn-health", "Health",
+            googleNews("health OR medicine OR WHO OR outbreak OR vaccine"),
+            SourceTier.AGGREGATOR, Category.HEALTH,
+        ),
+        FeedSource(
+            "bbc-health", "BBC Health",
+            "https://feeds.bbci.co.uk/news/health/rss.xml",
+            SourceTier.WIRE, Category.HEALTH,
+        ),
+
+        // Climate and environment
+        FeedSource(
+            "gn-climate", "Climate",
+            googleNews("climate change OR monsoon OR heatwave OR pollution OR environment"),
+            SourceTier.AGGREGATOR, Category.ENVIRONMENT,
+        ),
+        FeedSource(
+            "guardian-environment", "The Guardian Environment",
+            "https://www.theguardian.com/environment/rss",
+            SourceTier.WIRE, Category.ENVIRONMENT,
+        ),
+
+        // Sports
+        FeedSource(
+            "gn-sports", "Sports",
+            googleNews("cricket OR football OR Olympics OR tennis OR IPL"),
+            SourceTier.AGGREGATOR, Category.SPORTS,
+        ),
+        FeedSource(
+            "bbc-sport", "BBC Sport",
+            "https://feeds.bbci.co.uk/sport/rss.xml",
+            SourceTier.WIRE, Category.SPORTS,
+        ),
+        FeedSource(
+            "cricinfo", "ESPNcricinfo",
+            "https://www.espncricinfo.com/rss/content/story/feeds/0.xml",
+            SourceTier.WIRE, Category.SPORTS,
+        ),
+
+        // Culture
+        FeedSource(
+            "gn-culture", "Culture",
+            googleNews("film OR box office OR music OR books OR art festival"),
+            SourceTier.AGGREGATOR, Category.CULTURE,
+        ),
+        FeedSource(
+            "guardian-culture", "The Guardian Culture",
+            "https://www.theguardian.com/culture/rss",
+            SourceTier.WIRE, Category.CULTURE,
+        ),
+    )
+
+    val ALL: List<FeedSource> = QUERY_FEEDS + PUBLISHER_FEEDS + NSE_FEEDS + WORLD_FEEDS
 
     private val BY_ID: Map<String, FeedSource> by lazy { ALL.associateBy { it.id } }
 

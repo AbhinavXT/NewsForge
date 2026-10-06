@@ -123,4 +123,28 @@ class IngestTest {
         assertEquals(now - 1, Ingest.resolvePublishedAt(now - 1, now))
         assertEquals(now, Ingest.resolvePublishedAt(now + 1, now))
     }
+
+    private val scienceFeed = FeedSource(
+        id = "bbc-science",
+        name = "BBC Science",
+        url = "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml",
+        tier = SourceTier.WIRE,
+        categoryHint = Category.SCIENCE,
+    )
+
+    @Test
+    fun aWorldFeedsTopicIsFinalEvenWhenTheHeadlineReadsLikeAMarketEvent() {
+        // "bags order" would otherwise be categorised as an order win and moved to the
+        // market feed, away from the tab the feed was added to.
+        val article = Ingest.toArticle(item(), scienceFeed, now)
+        assertEquals(Category.SCIENCE, article.category)
+    }
+
+    @Test
+    fun aWorldFeedIsNotTaggedWithCompaniesOrSectors() {
+        // Tags would pull a general story into a company's timeline and its alerts.
+        val article = Ingest.toArticle(item(), scienceFeed, now)
+        assertTrue(article.symbols.isEmpty())
+        assertTrue(article.sectors.isEmpty())
+    }
 }

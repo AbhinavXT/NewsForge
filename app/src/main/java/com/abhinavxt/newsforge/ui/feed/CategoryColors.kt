@@ -34,6 +34,16 @@ val Category.accent: Color
         // events around it, which is the entire reason it has its own bucket.
         Category.PRICE_TARGET -> CatViews
         Category.MANAGEMENT, Category.OTHER -> CatNeutral
+        // World topics reuse the same handful of hues. They never share a screen with the
+        // market categories, so a red that means "regulatory" there can mean "politics"
+        // here without the two being read against each other.
+        Category.POLITICS -> CatRegulatory
+        Category.INDIA -> CatPolicy
+        Category.WORLD -> CatGlobal
+        Category.SCIENCE -> CatResults
+        Category.TECHNOLOGY -> CatDeal
+        Category.HEALTH, Category.ENVIRONMENT -> CatOrder
+        Category.SPORTS, Category.CULTURE -> CatViews
     }
 
 /**
@@ -50,5 +60,5 @@ val CategoryGroup.accent: Color
         CategoryGroup.POLICY -> CatPolicy
         CategoryGroup.GLOBAL -> CatGlobal
         CategoryGroup.VIEWS -> CatViews
-        CategoryGroup.OTHER -> CatNeutral
+        CategoryGroup.OTHER, CategoryGroup.NEWS -> CatNeutral
     }

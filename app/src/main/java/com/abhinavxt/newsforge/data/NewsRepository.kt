@@ -17,6 +17,7 @@ import com.abhinavxt.newsforge.core.feed.NseSession
 import com.abhinavxt.newsforge.core.learn.ImportanceModel
 import com.abhinavxt.newsforge.core.search.SearchQuery
 import com.abhinavxt.newsforge.core.model.Category
+import com.abhinavxt.newsforge.core.model.Desk
 import com.abhinavxt.newsforge.core.model.FeedSource
 import com.abhinavxt.newsforge.core.model.SourceTier
 import com.abhinavxt.newsforge.core.rank.MarketClock
@@ -168,7 +169,7 @@ class NewsRepository(
             .flatMapLatest { now ->
                 val since = Retention.cutoffMillis(now)
                 if (symbols.isEmpty()) {
-                    articleDao.stories(since)
+                    articleDao.stories(since, MARKET_CATEGORIES)
                 } else {
                     articleDao.storiesForSymbols(since, symbols)
                 }
@@ -179,6 +180,22 @@ class NewsRepository(
             .flowOn(computeDispatcher)
 
     /**
+     * General news for the World tab, ranked on recency and coverage alone.
+     *
+     * Never handed the learned model. It was trained on how stocks reacted to stories,
+     * and what it would say about a science story is an accident of its weights, not a
+     * judgement. The hand-tuned ranker is the honest default here: newer and more widely
+     * carried first.
+     */
+    fun worldStories(): Flow<List<ScoredArticle>> =
+        ticks(WINDOW_TICK_MS, clock)
+            .flatMapLatest { now ->
+                articleDao.stories(Retention.cutoffMillis(now), WORLD_CATEGORIES)
+            }
+            .map { list -> FeedRanking.rank(list.map { it.toSummary() }, clock(), model = null) }
+            .flowOn(computeDispatcher)
+
+    /**
      * Free-text search, over a wider window than the feed.
      *
      * Reaches back to the history floor rather than the feed's window, because the reason
@@ -186,7 +203,7 @@ class NewsRepository(
      * those are exactly the older ones. Past the window most matches are compacted, so
      * they are found by headline, outlet and ticker rather than by summary.
      */
-    fun search(text: String): Flow<List<ScoredArticle>> {
+    fun search(text: String, desk: Desk = Desk.MARKETS): Flow<List<ScoredArticle>> {
         val trimmed = text.trim()
         if (trimmed.length < MIN_SEARCH_CHARS) return flowOf(emptyList())
         val since = Retention.historyCutoffMillis(clock())
@@ -199,7 +216,12 @@ class NewsRepository(
             // may still be a ticker, which is the one thing such input is likely to be.
             articleDao.searchSymbol(symbol = symbol, since = since)
         }
+        val categories = Category.namesOn(desk).toSet()
         return rows
+            // Each tab searches its own half of the store. Filtered after the query rather
+            // than in it, because the full-text statements are shared with the migration
+            // path and a search result set is small.
+            .map { list -> list.filter { it.article.category in categories } }
             .combine(importance) { list, model ->
                 // Scored, so the story sheet can still explain each result, but kept in
                 // the order the query returned: newest first. A search is asking when
@@ -724,7 +746,9 @@ class NewsRepository(
      */
     suspend fun alertCandidates(publishedSince: Long, fetchedAfter: Long): List<AlertCandidate> =
         withContext(ioDispatcher) {
-            articleDao.alertCandidates(publishedSince, fetchedAfter).map { row ->
+            articleDao.alertCandidates(publishedSince, fetchedAfter)
+                .filter { enumOrDefault(it.category, Category.OTHER).desk == Desk.MARKETS }
+                .map { row ->
                 AlertCandidate(
                     id = row.id,
                     clusterId = row.clusterId,
@@ -821,16 +845,22 @@ class NewsRepository(
             // Loaded once for the whole refresh and appended in memory as rows go in, so
             // items arriving in the same sync can cluster with each other and we do not
             // re-query per article.
-            val window = articleDao.clusterWindow(Retention.clusterWindowStart(startedAt))
-                .mapTo(ArrayList()) {
-                    ClusterMember(
-                        clusterId = it.clusterId,
-                        canonicalUrl = it.canonicalUrl,
-                        tokens = splitTokens(it.tokens),
-                        symbols = splitTokens(it.symbols),
-                        publishedAtMillis = it.publishedAt,
-                    )
-                }
+            //
+            // One window per desk. A world story and a market story about the same event —
+            // a ceasefire, a budget — are reported for different readers, and clustering
+            // them together would put one desk's story under the other desk's anchor,
+            // where its own tab would never show it.
+            val windows = HashMap<Desk, MutableList<ClusterMember>>()
+            for (row in articleDao.clusterWindow(Retention.clusterWindowStart(startedAt))) {
+                val desk = enumOrDefault(row.category, Category.OTHER).desk
+                windows.getOrPut(desk) { ArrayList() } += ClusterMember(
+                    clusterId = row.clusterId,
+                    canonicalUrl = row.canonicalUrl,
+                    tokens = splitTokens(row.tokens),
+                    symbols = splitTokens(row.symbols),
+                    publishedAtMillis = row.publishedAt,
+                )
+            }
 
             val feeds = activeFeeds()
             val tagger = lexicon()
@@ -847,6 +877,8 @@ class NewsRepository(
                 }
             }
             for (attempt in retryRejectedNse(fetchAll(feeds))) {
+                val desk = attempt.feed.categoryHint?.desk ?: Desk.MARKETS
+                val window = windows.getOrPut(desk) { ArrayList() }
                 outcomes += ingest(attempt, window, candidates, tagger)
             }
 
@@ -1115,7 +1147,10 @@ class NewsRepository(
         for ((index, id) in rowIds.withIndex()) {
             if (id != -1L) accepted += entities[index].id
         }
-        return alerts.filter { it.id in accepted }
+        // World stories are stored but never offered for alerts. Every alert rule is about
+        // a market event or a company you follow, and none of them should ring for a
+        // football score.
+        return alerts.filter { it.id in accepted && it.category.desk == Desk.MARKETS }
     }
 
     private suspend fun recordSuccess(
@@ -1171,6 +1206,9 @@ class NewsRepository(
 
     companion object {
         private const val TAG = "NewsRepository"
+
+        private val MARKET_CATEGORIES = Category.namesOn(Desk.MARKETS)
+        private val WORLD_CATEGORIES = Category.namesOn(Desk.WORLD)
 
         /**
          * Below this a search matches most of the database.

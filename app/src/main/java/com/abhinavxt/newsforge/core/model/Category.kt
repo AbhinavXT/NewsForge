@@ -74,10 +74,81 @@ enum class Category(
 
     /** Matched nothing. Still shown, just ranked below everything that matched. */
     OTHER("General", 0.7, CategoryGroup.OTHER),
+
+    // ---------------------------------------------------------------- world desk
+    //
+    // General news, read for its own sake rather than for what it does to a price. These
+    // come only from a feed's hint — the text rules above are about market events and have
+    // nothing useful to say about a science story — and they never reach the market feed,
+    // the alert path or the learned model. See [Desk].
+    //
+    // Weights are close together on purpose. Nothing here is "more likely to move a
+    // price"; the small spread only lets the day's hard news edge ahead of features when
+    // recency and coverage are otherwise equal.
+
+    /** National news: Parliament, states, courts, public life in India. */
+    INDIA("India", 1.1, CategoryGroup.NEWS),
+
+    /** Elections, parties, government and opposition, at home or abroad. */
+    POLITICS("Politics", 1.1, CategoryGroup.NEWS),
+
+    /** International affairs: diplomacy, conflict, other countries' news. */
+    WORLD("World", 1.1, CategoryGroup.NEWS),
+
+    /** Research, space, discoveries. */
+    SCIENCE("Science", 1.0, CategoryGroup.NEWS),
+
+    /** Technology as a subject: products, platforms, AI, the internet. */
+    TECHNOLOGY("Tech", 1.0, CategoryGroup.NEWS),
+
+    /** Medicine, public health, outbreaks. */
+    HEALTH("Health", 1.0, CategoryGroup.NEWS),
+
+    /** Climate, weather extremes, the environment. */
+    ENVIRONMENT("Climate", 1.0, CategoryGroup.NEWS),
+
+    SPORTS("Sports", 0.9, CategoryGroup.NEWS),
+
+    /** Film, books, music, the arts. */
+    CULTURE("Culture", 0.9, CategoryGroup.NEWS),
+    ;
+
+    val desk: Desk get() = group.desk
+
+    companion object {
+        /**
+         * The market taxonomy, in its original order.
+         *
+         * Anything that enumerates categories for the market side — the learned model's
+         * feature vector above all — iterates this rather than [entries]. Adding the world
+         * topics to that vector would change its length and orphan every weight the model
+         * has already learned.
+         */
+        val MARKETS: List<Category> = entries.filter { it.desk == Desk.MARKETS }
+
+        /** The world topics, in the order the World tab shows them. */
+        val WORLD_TOPICS: List<Category> = entries.filter { it.desk == Desk.WORLD }
+
+        /** Stored names per desk, for queries that select one side of the store. */
+        fun namesOn(desk: Desk): List<String> =
+            entries.filter { it.desk == desk }.map { it.name }
+    }
+}
+
+/**
+ * Which half of the app a story belongs to.
+ *
+ * The market feed and the World tab read from one article store, kept apart by category
+ * rather than by a column, because the category is already stored on every row and a
+ * feed's topic is the only thing that decides which side it is on.
+ */
+enum class Desk {
+    MARKETS,
+    WORLD,
 }
 
 /** Coarse buckets backing the UI filter chips. */
-enum class CategoryGroup(val label: String) {
+enum class CategoryGroup(val label: String, val desk: Desk = Desk.MARKETS) {
     MOVERS("Movers"),
     RESULTS("Results"),
 
@@ -92,4 +163,13 @@ enum class CategoryGroup(val label: String) {
     POLICY("Policy"),
     GLOBAL("Global"),
     OTHER("General"),
+
+    /** Everything on the World tab, which filters by topic rather than by bucket. */
+    NEWS("News", Desk.WORLD),
+    ;
+
+    companion object {
+        /** The buckets the market feed's chips and sections are built from. */
+        val MARKETS: List<CategoryGroup> = entries.filter { it.desk == Desk.MARKETS }
+    }
 }

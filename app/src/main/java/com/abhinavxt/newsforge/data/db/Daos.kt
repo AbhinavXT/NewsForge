@@ -17,6 +17,8 @@ data class ClusterWindowRow(
     val tokens: String,
     val symbols: String,
     val publishedAt: Long,
+    /** Which desk the row is on; the market and world stories cluster separately. */
+    val category: String,
 )
 
 /**
@@ -118,7 +120,7 @@ interface ArticleDao {
     suspend fun existingIds(ids: List<String>): List<String>
 
     @Query(
-        "SELECT id, clusterId, canonicalUrl, tokens, symbols, publishedAt FROM article " +
+        "SELECT id, clusterId, canonicalUrl, tokens, symbols, publishedAt, category FROM article " +
             "WHERE publishedAt >= :since"
     )
     suspend fun clusterWindow(since: Long): List<ClusterWindowRow>
@@ -148,10 +150,16 @@ interface ArticleDao {
             " WHERE b.clusterId = a.clusterId) AS lastPublishedAt " +
             "FROM article a " +
             "WHERE a.clusterId = a.id AND (a.publishedAt >= :since OR a.saved = 1) " +
+            "AND a.category IN (:categories) " +
             "ORDER BY a.publishedAt DESC LIMIT :limit"
     )
     fun stories(
         since: Long,
+        /**
+         * Stored category names to include — one desk's worth. Filtered in SQL rather than
+         * after, so a busy day of world news cannot push market stories past [limit].
+         */
+        categories: List<String>,
         limit: Int = FEED_LIMIT,
         outlets: Int = OUTLET_LIMIT,
     ): Flow<List<StoryRow>>

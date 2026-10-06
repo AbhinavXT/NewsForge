@@ -488,7 +488,7 @@ private fun FilterRow(
         )
         NfChip("Saved", selected = filter.savedOnly, onClick = onToggleSaved)
         NfChip("Unread", selected = filter.unreadOnly, onClick = onToggleUnread)
-        for (group in CategoryGroup.entries) {
+        for (group in CategoryGroup.MARKETS) {
             val count = counts[group] ?: 0
             if (count == 0) continue
             NfChip(
@@ -943,7 +943,11 @@ private fun CompanyRow(entry: SymbolEntry, onClick: () -> Unit) {
  * sent out is remembered, and anything matching it is this field hearing itself.
  */
 @Composable
-private fun SearchField(query: String, onQueryChange: (String) -> Unit) {
+internal fun SearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    placeholder: String = "Search headlines, tickers, companies",
+) {
     var text by rememberSaveable { mutableStateOf(query) }
     var lastSent by rememberSaveable { mutableStateOf(query) }
     LaunchedEffect(query) {
@@ -964,7 +968,7 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit) {
     OutlinedTextField(
         value = text,
         onValueChange = update,
-        placeholder = { Text("Search headlines, tickers, companies") },
+        placeholder = { Text(placeholder) },
         singleLine = true,
         shape = RoundedCornerShape(16.dp),
         leadingIcon = {

@@ -47,7 +47,7 @@ object ImportanceFeatures {
      */
     val NAMES: List<String> = buildList {
         add("bias")
-        Category.entries.forEach { add("cat:${it.name.lowercase()}") }
+        Category.MARKETS.forEach { add("cat:${it.name.lowercase()}") }
         SourceTier.entries.forEach { add("tier:${it.name.lowercase()}") }
         MarketPhase.entries.forEach { add("phase:${it.name.lowercase()}") }
         add("filing")
@@ -73,7 +73,7 @@ object ImportanceFeatures {
 
         out[index++] = 1.0
 
-        for (category in Category.entries) {
+        for (category in Category.MARKETS) {
             out[index++] = if (category == input.category) 1.0 else 0.0
         }
         for (tier in SourceTier.entries) {

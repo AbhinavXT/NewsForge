@@ -1,5 +1,7 @@
 package com.abhinavxt.newsforge.core.feed
 
+import com.abhinavxt.newsforge.core.model.Category
+import com.abhinavxt.newsforge.core.model.Desk
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -66,5 +68,25 @@ class DefaultFeedsTest {
             assertEquals("${feed.id} should be RSS", FeedKind.RSS, feed.kind)
         }
         assertTrue(DefaultFeeds.NSE_FEEDS.all { it.kind.isNse })
+    }
+
+    @Test
+    fun everyWorldFeedLandsOnTheWorldDeskAndNoMarketFeedDoes() {
+        // The hint is the only thing that decides which tab a feed's stories reach, so a
+        // world feed without one would pour general news into the market feed.
+        for (feed in DefaultFeeds.WORLD_FEEDS) {
+            assertEquals("${feed.id} is not a world feed", Desk.WORLD, feed.categoryHint?.desk)
+        }
+        for (feed in DefaultFeeds.QUERY_FEEDS + DefaultFeeds.PUBLISHER_FEEDS + DefaultFeeds.NSE_FEEDS) {
+            assertTrue("${feed.id} is on the world desk", feed.categoryHint?.desk != Desk.WORLD)
+        }
+    }
+
+    @Test
+    fun everyWorldTopicHasAFeed() {
+        val covered = DefaultFeeds.WORLD_FEEDS.mapNotNull { it.categoryHint }.toSet()
+        for (topic in Category.WORLD_TOPICS) {
+            assertTrue("no feed for ${topic.name}", topic in covered)
+        }
     }
 }

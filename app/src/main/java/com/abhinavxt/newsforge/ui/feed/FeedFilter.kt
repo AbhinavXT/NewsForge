@@ -164,7 +164,7 @@ object FeedFiltering {
      * surviving the current filter".
      */
     fun chipCounts(items: List<ScoredArticle>): Map<CategoryGroup, Int> =
-        CategoryGroup.entries.associateWith { group ->
+        CategoryGroup.MARKETS.associateWith { group ->
             items.count { it.article.category.group == group }
         }
 }
