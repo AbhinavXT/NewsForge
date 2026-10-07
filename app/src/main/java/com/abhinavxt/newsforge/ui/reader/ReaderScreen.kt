@@ -121,6 +121,8 @@ fun ReaderScreen(
     onPositionChange: (ReadingPosition) -> Unit,
     onRetry: () -> Unit,
     onBack: () -> Unit,
+    /** Reads the article aloud; null hides the button. */
+    onListen: ((ReaderArticle) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val done = state as? ReaderUiState.Done
@@ -151,6 +153,13 @@ fun ReaderScreen(
                     },
                     onBack = onBack,
                     actions = {
+                        if (article != null && onListen != null) {
+                            IconCircleButton(
+                                icon = R.drawable.ic_listen,
+                                contentDescription = "Listen to this article",
+                                onClick = { onListen(article) },
+                            )
+                        }
                         if (article != null) {
                             IconCircleButton(
                                 icon = R.drawable.ic_text_size,

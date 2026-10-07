@@ -93,6 +93,9 @@ import com.abhinavxt.newsforge.ui.feed.FeedUiState
 import com.abhinavxt.newsforge.ui.feed.FeedViewModel
 import com.abhinavxt.newsforge.ui.world.WorldCustomiseActions
 import com.abhinavxt.newsforge.ui.world.WorldScreen
+import com.abhinavxt.newsforge.listen.Narrator
+import com.abhinavxt.newsforge.ui.listen.ListenBar
+import com.abhinavxt.newsforge.ui.listen.toListenItem
 import com.abhinavxt.newsforge.ui.world.WorldUiState
 import com.abhinavxt.newsforge.data.WorldPreferences
 import com.abhinavxt.newsforge.ui.world.WorldViewModel
@@ -138,6 +141,7 @@ fun NewsForgeRoot(
     watchPreferences: WatchPreferences,
     appearancePreferences: AppearancePreferences,
     worldPreferences: WorldPreferences,
+    narrator: Narrator,
     readerDeps: ReaderDeps,
     priceAlertRepository: PriceAlertRepository,
     savedArticles: SavedArticles,
@@ -184,6 +188,10 @@ fun NewsForgeRoot(
         factory = WorldViewModel.factory(repository, savedArticles, worldPreferences),
     )
     val worldState by worldViewModel.uiState.collectAsStateWithLifecycle()
+    val listening by narrator.state.collectAsStateWithLifecycle()
+    val listenTo: (List<ScoredArticle>) -> Unit = { stories ->
+        narrator.play(stories.map { it.toListenItem() })
+    }
     val symbolMatches by feedViewModel.symbolMatches.collectAsStateWithLifecycle()
 
     // Foreground polling, scoped to STARTED so it stops when the app is backgrounded.
@@ -262,10 +270,19 @@ fun NewsForgeRoot(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            NavDock(
-                selected = nav.tab,
-                onSelect = { tab -> nav = Nav.selectTab(nav, tab) },
-            )
+            Column {
+                ListenBar(
+                    state = listening,
+                    onToggle = narrator::toggle,
+                    onNext = narrator::next,
+                    onPrevious = narrator::previous,
+                    onStop = narrator::stop,
+                )
+                NavDock(
+                    selected = nav.tab,
+                    onSelect = { tab -> nav = Nav.selectTab(nav, tab) },
+                )
+            }
         },
     ) { padding ->
         AnimatedContent(
@@ -368,6 +385,7 @@ fun NewsForgeRoot(
                             onSettingsChange = readerViewModel::updateSettings,
                             onPositionChange = readerViewModel::savePosition,
                             onRetry = readerViewModel::retry,
+                            onListen = { article -> narrator.play(listOf(article.toListenItem())) },
                             onBack = { Nav.pop(nav)?.let { nav = it } },
                         )
                     }
@@ -401,6 +419,11 @@ fun NewsForgeRoot(
                             },
                             onOpenSymbol = pushSymbol,
                             onBack = { Nav.pop(nav)?.let { nav = it } },
+                            // From the card on screen to the end of the pile, so listening
+                            // picks up exactly where reading left off.
+                            onListen = { from -> listenTo(queue.drop(from)) },
+                            listeningId = listening.current?.clusterId
+                                ?.takeIf { listening.active },
                         )
                     }
 
@@ -499,6 +522,8 @@ fun NewsForgeRoot(
                                     catchUpIds = ids
                                     nav = Nav.push(nav, Detail.CatchUp)
                                 },
+                                onListenStory = { scored -> listenTo(listOf(scored)) },
+                                onListenAll = listenTo,
                                 onToggleRead = { scored ->
                                     worldViewModel.setRead(
                                         scored.article.clusterId,

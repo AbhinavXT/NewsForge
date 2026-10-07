@@ -16,6 +16,17 @@
     -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
+    <!--
+        Listen mode. From Android 11 the speech engine's service is invisible to an app
+        that does not declare it here, and TextToSpeech then fails to bind with no error
+        beyond silence.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
+
     <application
         android:name=".NewsForgeApp"
         android:allowBackup="true"

@@ -73,6 +73,7 @@ class MainActivity : ComponentActivity() {
                         watchPreferences = container.watchPreferences,
                         appearancePreferences = container.appearancePreferences,
                         worldPreferences = container.worldPreferences,
+                        narrator = container.narrator,
                         readerDeps = ReaderDeps(
                             reader = container.readerRepository,
                             news = container.repository,
@@ -94,6 +95,13 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onDestroy() {
+        // Leaving the app ends listening; a rotation, which also destroys the activity,
+        // must not.
+        if (isFinishing) (application as NewsForgeApp).container.narrator.shutdown()
+        super.onDestroy()
     }
 
     /**

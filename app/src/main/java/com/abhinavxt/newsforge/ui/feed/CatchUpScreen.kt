@@ -45,6 +45,7 @@ import com.abhinavxt.newsforge.core.tag.Sector
 import com.abhinavxt.newsforge.data.model.ArticleSummary
 import com.abhinavxt.newsforge.data.model.ScoredArticle
 import com.abhinavxt.newsforge.ui.components.EmptyState
+import com.abhinavxt.newsforge.ui.components.IconCircleButton
 import com.abhinavxt.newsforge.ui.components.NfCard
 import com.abhinavxt.newsforge.ui.components.Pill
 import com.abhinavxt.newsforge.ui.components.PrimaryButton
@@ -82,6 +83,10 @@ fun CatchUpScreen(
     onToggleSave: (ScoredArticle) -> Unit,
     onOpenSymbol: (String) -> Unit,
     onBack: () -> Unit,
+    /** Reads the pile aloud from this index on; null hides the button. */
+    onListen: ((Int) -> Unit)? = null,
+    /** The story being read aloud, which the pager turns to as listening moves on. */
+    listeningId: String? = null,
 ) {
     // One page past the last story, for the finish.
     val pager = rememberPagerState { stories.size + 1 }
@@ -101,6 +106,13 @@ fun CatchUpScreen(
         }
     }
 
+    // Listening drives the pager: as each story finishes, the next card comes up, and
+    // turning past a card is what marks it read — the same as swiping.
+    LaunchedEffect(listeningId) {
+        val index = stories.indexOfFirst { it.article.clusterId == listeningId }
+        if (index >= 0 && index != pager.currentPage) pager.animateScrollToPage(index)
+    }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -113,6 +125,15 @@ fun CatchUpScreen(
                         "Done"
                     },
                     onBack = onBack,
+                    actions = {
+                        if (onListen != null && position < stories.size) {
+                            IconCircleButton(
+                                icon = R.drawable.ic_listen,
+                                contentDescription = "Listen from this story",
+                                onClick = { onListen(position) },
+                            )
+                        }
+                    },
                 )
                 LinearProgressIndicator(
                     progress = { if (stories.isEmpty()) 1f else position.toFloat() / stories.size },

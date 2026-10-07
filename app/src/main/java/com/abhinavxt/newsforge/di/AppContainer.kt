@@ -1,5 +1,6 @@
 package com.abhinavxt.newsforge.di
 
+import com.abhinavxt.newsforge.listen.Narrator
 import android.content.Context
 import com.abhinavxt.newsforge.data.AlertPreferences
 import com.abhinavxt.newsforge.data.AppearancePreferences
@@ -56,6 +57,9 @@ class AppContainer(context: Context) {
     val worldPreferences: WorldPreferences by lazy { WorldPreferences(appContext) }
 
     val notifier: Notifier by lazy { Notifier(appContext) }
+
+    /** Listen mode. App-scoped so speech survives rotation and tab changes. */
+    val narrator: Narrator by lazy { Narrator(appContext) }
 
     /**
      * Shares the fetcher with the feeds, which is the point: the NSE quote endpoint wants
