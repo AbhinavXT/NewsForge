@@ -91,6 +91,7 @@ class SyncWorker(
             tolerate(TAG, "world alerts") {
                 postWorldKeywordAlerts(container, report.worldArrivals, firstSync = lastWorldSync == 0L)
             }
+            tolerate(TAG, "world digest") { postWorldDigest(container) }
             postEventReminders(container)
             // Last: copies of saved stories for offline reading are the least urgent
             // thing a sync does, and each is a page download.

@@ -1,5 +1,7 @@
 package com.abhinavxt.newsforge.work
 
+import com.abhinavxt.newsforge.core.model.Desk
+import com.abhinavxt.newsforge.core.world.WorldDigest
 import com.abhinavxt.newsforge.core.notify.AlertCandidate
 import com.abhinavxt.newsforge.core.world.KeywordAlerts
 import android.util.Log
@@ -282,4 +284,40 @@ internal suspend fun postWorldKeywordAlerts(
     if (alerts.isEmpty()) return
     val posted = container.notifier.postWorldKeywords(alerts)
     if (posted.isNotEmpty()) repository.markNotified(posted.map { it.candidate.clusterId })
+}
+
+/**
+ * Sends the evening world digest once a day, after the hour the reader chose.
+ *
+ * Marked as sent even when nothing qualified: an evening with no unread world news is an
+ * answer, and checking again every fifteen minutes until midnight would only send a
+ * digest of whatever trickled in at 23:45.
+ */
+internal suspend fun postWorldDigest(container: AppContainer) {
+    val preferences = container.worldPreferences
+    val world = preferences.current()
+    if (!world.digestEnabled) return
+    val now = System.currentTimeMillis()
+    val zone = java.time.ZoneId.systemDefault()
+    if (!WorldDigest.isDue(now, world.digestHour, preferences.lastDigestDay, zone)) return
+    // Nothing to summarise until the world feeds have been read at least once.
+    if (container.repository.lastSyncedAt(Desk.WORLD) == 0L) return
+
+    val ranked = container.repository.worldStories().first()
+    val byId = ranked.associateBy { it.article.clusterId }
+    val picked = WorldDigest.select(
+        ranked = ranked.map {
+            WorldDigest.Story(
+                clusterId = it.article.clusterId,
+                category = it.article.category,
+                publishedAt = it.article.publishedAt,
+                read = it.article.read,
+            )
+        },
+        hidden = world.hidden,
+        nowMillis = now,
+    ).mapNotNull { byId[it]?.article }
+    if (picked.isEmpty() || container.notifier.postWorldDigest(picked)) {
+        preferences.lastDigestDay = WorldDigest.dayOf(now, zone)
+    }
 }
