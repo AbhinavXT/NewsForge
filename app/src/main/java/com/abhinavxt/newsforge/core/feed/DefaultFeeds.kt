@@ -38,6 +38,25 @@ object DefaultFeeds {
     }
 
     /**
+     * A Google News topic section, India edition.
+     *
+     * Different from [googleNews]: a section is Google's own editorial grouping of the
+     * day's biggest stories in that subject, where a query is every outlet matching some
+     * words. The section is the better front page; the query reaches further down.
+     *
+     * @param section one of Google's fixed section ids — WORLD, NATION, BUSINESS,
+     *   TECHNOLOGY, ENTERTAINMENT, SPORTS, SCIENCE, HEALTH — or null for the front page.
+     */
+    fun googleNewsTopic(section: String?): String {
+        val edition = "hl=en-IN&gl=IN&ceid=IN%3Aen"
+        return if (section == null) {
+            "https://news.google.com/rss?$edition"
+        } else {
+            "https://news.google.com/rss/headlines/section/topic/$section?$edition"
+        }
+    }
+
+    /**
      * Standing queries, one per event type.
      *
      * Split by event rather than by publisher because the categoriser then has a strong
@@ -349,7 +368,7 @@ object DefaultFeeds {
         // Culture
         FeedSource(
             "gn-culture", "Culture",
-            googleNews("film OR box office OR music OR books OR art festival"),
+            googleNews("books OR literature OR art exhibition OR theatre OR museum"),
             SourceTier.AGGREGATOR, Category.CULTURE,
         ),
         FeedSource(
@@ -357,9 +376,312 @@ object DefaultFeeds {
             "https://www.theguardian.com/culture/rss",
             SourceTier.WIRE, Category.CULTURE,
         ),
+        FeedSource(
+            "guardian-books", "The Guardian Books",
+            "https://www.theguardian.com/books/rss",
+            SourceTier.WIRE, Category.CULTURE,
+        ),
+
+        // More depth on the original topics
+        FeedSource(
+            "nyt-world", "New York Times World",
+            "https://rss.nytimes.com/services/xml/rss/nyt/World.xml",
+            SourceTier.WIRE, Category.WORLD,
+        ),
+        FeedSource(
+            "nature", "Nature",
+            "https://www.nature.com/nature.rss",
+            SourceTier.WIRE, Category.SCIENCE,
+        ),
+        FeedSource(
+            "hindu-scitech", "The Hindu Sci-Tech",
+            "https://www.thehindu.com/sci-tech/feeder/default.rss",
+            SourceTier.WIRE, Category.SCIENCE,
+        ),
+        FeedSource(
+            "bbc-tech", "BBC Technology",
+            "https://feeds.bbci.co.uk/news/technology/rss.xml",
+            SourceTier.WIRE, Category.TECHNOLOGY,
+        ),
+
+        // Entertainment
+        FeedSource(
+            "gn-entertainment-q", "Entertainment",
+            googleNews("Bollywood OR box office OR web series OR OTT OR Hollywood"),
+            SourceTier.AGGREGATOR, Category.ENTERTAINMENT,
+        ),
+        FeedSource(
+            "ie-entertainment", "Indian Express Entertainment",
+            "https://indianexpress.com/section/entertainment/feed/",
+            SourceTier.WIRE, Category.ENTERTAINMENT,
+        ),
+        FeedSource(
+            "bollywood-hungama", "Bollywood Hungama",
+            "https://www.bollywoodhungama.com/rss/news.xml",
+            SourceTier.WIRE, Category.ENTERTAINMENT,
+        ),
+        FeedSource(
+            "variety", "Variety",
+            "https://variety.com/feed/",
+            SourceTier.WIRE, Category.ENTERTAINMENT,
+        ),
+        FeedSource(
+            "bbc-entertainment", "BBC Entertainment & Arts",
+            "https://feeds.bbci.co.uk/news/entertainment_and_arts/rss.xml",
+            SourceTier.WIRE, Category.ENTERTAINMENT,
+        ),
+        FeedSource(
+            "guardian-film", "The Guardian Film",
+            "https://www.theguardian.com/film/rss",
+            SourceTier.WIRE, Category.ENTERTAINMENT,
+        ),
+        FeedSource(
+            "guardian-music", "The Guardian Music",
+            "https://www.theguardian.com/music/rss",
+            SourceTier.WIRE, Category.ENTERTAINMENT,
+        ),
+
+        // Education
+        FeedSource(
+            "gn-education", "Education",
+            googleNews("CBSE OR NEET OR JEE OR UGC OR university OR board exam OR school education"),
+            SourceTier.AGGREGATOR, Category.EDUCATION,
+        ),
+        FeedSource(
+            "ie-education", "Indian Express Education",
+            "https://indianexpress.com/section/education/feed/",
+            SourceTier.WIRE, Category.EDUCATION,
+        ),
+        FeedSource(
+            "hindu-education", "The Hindu Education",
+            "https://www.thehindu.com/education/feeder/default.rss",
+            SourceTier.WIRE, Category.EDUCATION,
+        ),
+        FeedSource(
+            "bbc-education", "BBC Education",
+            "https://feeds.bbci.co.uk/news/education/rss.xml",
+            SourceTier.WIRE, Category.EDUCATION,
+        ),
+        FeedSource(
+            "guardian-education", "The Guardian Education",
+            "https://www.theguardian.com/education/rss",
+            SourceTier.WIRE, Category.EDUCATION,
+        ),
+
+        // Law and crime
+        FeedSource(
+            "gn-law", "Law and crime",
+            googleNews("Supreme Court OR High Court verdict OR police arrest OR crime India"),
+            SourceTier.AGGREGATOR, Category.LAW,
+        ),
+        FeedSource(
+            "livelaw", "LiveLaw",
+            "https://www.livelaw.in/category/top-stories/google_feeds.xml",
+            SourceTier.WIRE, Category.LAW,
+        ),
+        FeedSource(
+            "guardian-law", "The Guardian Law",
+            "https://www.theguardian.com/law/rss",
+            SourceTier.WIRE, Category.LAW,
+        ),
+
+        // Cities
+        FeedSource(
+            "gn-cities", "City news",
+            googleNews("Delhi OR Mumbai OR Bengaluru OR Chennai OR Kolkata OR Hyderabad civic OR metro OR traffic"),
+            SourceTier.AGGREGATOR, Category.CITIES,
+        ),
+        FeedSource(
+            "ie-cities", "Indian Express Cities",
+            "https://indianexpress.com/section/cities/feed/",
+            SourceTier.WIRE, Category.CITIES,
+        ),
+        FeedSource(
+            "hindu-cities", "The Hindu Cities",
+            "https://www.thehindu.com/news/cities/feeder/default.rss",
+            SourceTier.WIRE, Category.CITIES,
+        ),
+
+        // Auto
+        FeedSource(
+            "gn-auto", "Auto",
+            googleNews("car launch OR bike launch OR electric vehicle OR EV review India"),
+            SourceTier.AGGREGATOR, Category.AUTO,
+        ),
+        FeedSource(
+            "autocar", "Autocar",
+            "https://www.autocar.co.uk/rss",
+            SourceTier.WIRE, Category.AUTO,
+        ),
+        FeedSource(
+            "motor1", "Motor1",
+            "https://www.motor1.com/rss/news/all/",
+            SourceTier.WIRE, Category.AUTO,
+        ),
+        FeedSource(
+            "guardian-motoring", "The Guardian Motoring",
+            "https://www.theguardian.com/technology/motoring/rss",
+            SourceTier.WIRE, Category.AUTO,
+        ),
+
+        // Gaming
+        FeedSource(
+            "gn-gaming", "Gaming",
+            googleNews("video game OR PlayStation OR Xbox OR Nintendo OR esports"),
+            SourceTier.AGGREGATOR, Category.GAMING,
+        ),
+        FeedSource(
+            "eurogamer", "Eurogamer",
+            "https://www.eurogamer.net/feed",
+            SourceTier.WIRE, Category.GAMING,
+        ),
+        FeedSource(
+            "polygon", "Polygon",
+            "https://www.polygon.com/rss/index.xml",
+            SourceTier.WIRE, Category.GAMING,
+        ),
+        FeedSource(
+            "gamespot", "GameSpot",
+            "https://www.gamespot.com/feeds/news/",
+            SourceTier.WIRE, Category.GAMING,
+        ),
+
+        // Travel
+        FeedSource(
+            "gn-travel", "Travel",
+            googleNews("travel OR tourism OR visa OR airline OR destination"),
+            SourceTier.AGGREGATOR, Category.TRAVEL,
+        ),
+        FeedSource(
+            "guardian-travel", "The Guardian Travel",
+            "https://www.theguardian.com/travel/rss",
+            SourceTier.WIRE, Category.TRAVEL,
+        ),
+        FeedSource(
+            "cntraveler", "Condé Nast Traveler",
+            "https://www.cntraveler.com/feed/rss",
+            SourceTier.WIRE, Category.TRAVEL,
+        ),
+
+        // Food
+        FeedSource(
+            "gn-food", "Food",
+            googleNews("food OR recipe OR restaurant OR chef OR cuisine"),
+            SourceTier.AGGREGATOR, Category.FOOD,
+        ),
+        FeedSource(
+            "guardian-food", "The Guardian Food",
+            "https://www.theguardian.com/food/rss",
+            SourceTier.WIRE, Category.FOOD,
+        ),
+
+        // Lifestyle
+        FeedSource(
+            "gn-lifestyle", "Lifestyle",
+            googleNews("lifestyle OR wellness OR fitness OR fashion OR relationships"),
+            SourceTier.AGGREGATOR, Category.LIFESTYLE,
+        ),
+        FeedSource(
+            "ie-lifestyle", "Indian Express Lifestyle",
+            "https://indianexpress.com/section/lifestyle/feed/",
+            SourceTier.WIRE, Category.LIFESTYLE,
+        ),
+        FeedSource(
+            "hindu-lifestyle", "The Hindu Life & Style",
+            "https://www.thehindu.com/life-and-style/feeder/default.rss",
+            SourceTier.WIRE, Category.LIFESTYLE,
+        ),
+        FeedSource(
+            "guardian-lifestyle", "The Guardian Life & Style",
+            "https://www.theguardian.com/lifeandstyle/rss",
+            SourceTier.WIRE, Category.LIFESTYLE,
+        ),
+
+        // Opinion
+        FeedSource(
+            "hindu-opinion", "The Hindu Opinion",
+            "https://www.thehindu.com/opinion/feeder/default.rss",
+            SourceTier.WIRE, Category.OPINION,
+        ),
+        FeedSource(
+            "guardian-opinion", "The Guardian Opinion",
+            "https://www.theguardian.com/commentisfree/rss",
+            SourceTier.WIRE, Category.OPINION,
+        ),
     )
 
-    val ALL: List<FeedSource> = QUERY_FEEDS + PUBLISHER_FEEDS + NSE_FEEDS + WORLD_FEEDS
+    /**
+     * Aggregators for the World tab: services that collect other outlets' stories.
+     *
+     * The publisher feeds above give one newsroom's view; these give the spread. Google's
+     * topic sections are its editors' pick of the day in each subject, which is the
+     * closest thing to a front page the app can get without choosing outlets for you.
+     * Techmeme and Hacker News do the same for technology, from opposite ends — one an
+     * edited river of the press, the other what engineers are reading.
+     *
+     * All AGGREGATOR tier: an aggregator repeats a story it did not report, and a story
+     * carried by six outlets through one aggregator is still one report.
+     */
+    val WORLD_AGGREGATOR_FEEDS: List<FeedSource> = listOf(
+        FeedSource(
+            "gn-top", "Google News top stories",
+            googleNewsTopic(null),
+            SourceTier.AGGREGATOR, Category.HEADLINES,
+        ),
+        FeedSource(
+            "npr-news", "NPR News",
+            "https://feeds.npr.org/1001/rss.xml",
+            SourceTier.WIRE, Category.HEADLINES,
+        ),
+        FeedSource(
+            "gn-section-nation", "Google News India",
+            googleNewsTopic("NATION"),
+            SourceTier.AGGREGATOR, Category.INDIA,
+        ),
+        FeedSource(
+            "gn-section-world", "Google News World",
+            googleNewsTopic("WORLD"),
+            SourceTier.AGGREGATOR, Category.WORLD,
+        ),
+        FeedSource(
+            "gn-section-science", "Google News Science",
+            googleNewsTopic("SCIENCE"),
+            SourceTier.AGGREGATOR, Category.SCIENCE,
+        ),
+        FeedSource(
+            "gn-section-tech", "Google News Technology",
+            googleNewsTopic("TECHNOLOGY"),
+            SourceTier.AGGREGATOR, Category.TECHNOLOGY,
+        ),
+        FeedSource(
+            "gn-section-health", "Google News Health",
+            googleNewsTopic("HEALTH"),
+            SourceTier.AGGREGATOR, Category.HEALTH,
+        ),
+        FeedSource(
+            "gn-section-sports", "Google News Sports",
+            googleNewsTopic("SPORTS"),
+            SourceTier.AGGREGATOR, Category.SPORTS,
+        ),
+        FeedSource(
+            "gn-section-entertainment", "Google News Entertainment",
+            googleNewsTopic("ENTERTAINMENT"),
+            SourceTier.AGGREGATOR, Category.ENTERTAINMENT,
+        ),
+        FeedSource(
+            "techmeme", "Techmeme",
+            "https://www.techmeme.com/feed.xml",
+            SourceTier.AGGREGATOR, Category.TECHNOLOGY,
+        ),
+        FeedSource(
+            "hn-frontpage", "Hacker News",
+            "https://hnrss.org/frontpage",
+            SourceTier.AGGREGATOR, Category.TECHNOLOGY,
+        ),
+    )
+
+    val ALL: List<FeedSource> =
+        QUERY_FEEDS + PUBLISHER_FEEDS + NSE_FEEDS + WORLD_FEEDS + WORLD_AGGREGATOR_FEEDS
 
     private val BY_ID: Map<String, FeedSource> by lazy { ALL.associateBy { it.id } }
 

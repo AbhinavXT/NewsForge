@@ -37,13 +37,14 @@ val Category.accent: Color
         // World topics reuse the same handful of hues. They never share a screen with the
         // market categories, so a red that means "regulatory" there can mean "politics"
         // here without the two being read against each other.
-        Category.POLITICS -> CatRegulatory
-        Category.INDIA -> CatPolicy
-        Category.WORLD -> CatGlobal
-        Category.SCIENCE -> CatResults
-        Category.TECHNOLOGY -> CatDeal
-        Category.HEALTH, Category.ENVIRONMENT -> CatOrder
-        Category.SPORTS, Category.CULTURE -> CatViews
+        Category.POLITICS, Category.LAW -> CatRegulatory
+        Category.INDIA, Category.CITIES, Category.EDUCATION -> CatPolicy
+        Category.WORLD, Category.TRAVEL -> CatGlobal
+        Category.SCIENCE, Category.AUTO -> CatResults
+        Category.TECHNOLOGY, Category.GAMING -> CatDeal
+        Category.HEALTH, Category.ENVIRONMENT, Category.FOOD -> CatOrder
+        Category.SPORTS, Category.CULTURE, Category.ENTERTAINMENT, Category.LIFESTYLE -> CatViews
+        Category.HEADLINES, Category.OPINION -> CatNeutral
     }
 
 /**

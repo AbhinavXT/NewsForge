@@ -74,7 +74,7 @@ class DefaultFeedsTest {
     fun everyWorldFeedLandsOnTheWorldDeskAndNoMarketFeedDoes() {
         // The hint is the only thing that decides which tab a feed's stories reach, so a
         // world feed without one would pour general news into the market feed.
-        for (feed in DefaultFeeds.WORLD_FEEDS) {
+        for (feed in DefaultFeeds.WORLD_FEEDS + DefaultFeeds.WORLD_AGGREGATOR_FEEDS) {
             assertEquals("${feed.id} is not a world feed", Desk.WORLD, feed.categoryHint?.desk)
         }
         for (feed in DefaultFeeds.QUERY_FEEDS + DefaultFeeds.PUBLISHER_FEEDS + DefaultFeeds.NSE_FEEDS) {
@@ -83,8 +83,20 @@ class DefaultFeedsTest {
     }
 
     @Test
+    fun googleNewsTopicSectionsCarryTheIndiaEdition() {
+        assertEquals(
+            "https://news.google.com/rss/headlines/section/topic/WORLD?hl=en-IN&gl=IN&ceid=IN%3Aen",
+            DefaultFeeds.googleNewsTopic("WORLD"),
+        )
+        assertEquals(
+            "https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN%3Aen",
+            DefaultFeeds.googleNewsTopic(null),
+        )
+    }
+
+    @Test
     fun everyWorldTopicHasAFeed() {
-        val covered = DefaultFeeds.WORLD_FEEDS.mapNotNull { it.categoryHint }.toSet()
+        val covered = (DefaultFeeds.WORLD_FEEDS + DefaultFeeds.WORLD_AGGREGATOR_FEEDS).mapNotNull { it.categoryHint }.toSet()
         for (topic in Category.WORLD_TOPICS) {
             assertTrue("no feed for ${topic.name}", topic in covered)
         }

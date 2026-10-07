@@ -86,6 +86,14 @@ enum class Category(
     // price"; the small spread only lets the day's hard news edge ahead of features when
     // recency and coverage are otherwise equal.
 
+    /**
+     * The day's front page, from aggregators that mix every subject.
+     *
+     * Its own topic rather than a guess at one: a general front page has no single
+     * subject, and forcing it into World or India would mislabel half of it.
+     */
+    HEADLINES("Headlines", 1.15, CategoryGroup.NEWS),
+
     /** National news: Parliament, states, courts, public life in India. */
     INDIA("India", 1.1, CategoryGroup.NEWS),
 
@@ -109,8 +117,41 @@ enum class Category(
 
     SPORTS("Sports", 0.9, CategoryGroup.NEWS),
 
-    /** Film, books, music, the arts. */
+    /** Books, the arts, ideas — the slower end of what used to share a heading with film. */
     CULTURE("Culture", 0.9, CategoryGroup.NEWS),
+
+    /** Film, television, music, celebrities. */
+    ENTERTAINMENT("Entertainment", 0.9, CategoryGroup.NEWS),
+
+    /** Schools, universities, exams, admissions. */
+    EDUCATION("Education", 1.0, CategoryGroup.NEWS),
+
+    /** Courts, judgments, crime and policing. */
+    LAW("Law & crime", 1.0, CategoryGroup.NEWS),
+
+    /** City news: civic issues, transport, local government. */
+    CITIES("Cities", 0.95, CategoryGroup.NEWS),
+
+    /** Cars, bikes, EVs, launches and reviews. */
+    AUTO("Auto", 0.85, CategoryGroup.NEWS),
+
+    GAMING("Gaming", 0.85, CategoryGroup.NEWS),
+
+    TRAVEL("Travel", 0.8, CategoryGroup.NEWS),
+
+    FOOD("Food", 0.8, CategoryGroup.NEWS),
+
+    /** Wellbeing, fashion, relationships, the home. */
+    LIFESTYLE("Lifestyle", 0.8, CategoryGroup.NEWS),
+
+    /**
+     * Columns, editorials and analysis.
+     *
+     * Kept apart from the reporting it comments on, for the same reason broker calls are
+     * kept apart from market events: an argument about what happened should not be
+     * mistaken for news that it did.
+     */
+    OPINION("Opinion", 0.9, CategoryGroup.NEWS),
     ;
 
     val desk: Desk get() = group.desk
