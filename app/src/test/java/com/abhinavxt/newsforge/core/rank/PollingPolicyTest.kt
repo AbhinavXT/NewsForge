@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Test
 import java.time.OffsetDateTime
 
@@ -58,5 +59,16 @@ class PollingPolicyTest {
             PollingPolicy.intervalMillisAt(ist("2026-09-09T08:00:00")),
         )
         assertNull(PollingPolicy.intervalMillisAt(ist("2026-09-12T11:00:00")))
+    }
+
+    @Test
+    fun worldFeedsAreDueOnceTheBackgroundIntervalHasPassedAllowingForDrift() {
+        val now = 1_757_400_000_000L
+        val minute = 60_000L
+        assertTrue(PollingPolicy.worldDue(lastSyncedAtMillis = 0L, nowMillis = now))
+        assertFalse(PollingPolicy.worldDue(now - 15 * minute, now))
+        // A run that drifts a minute early must not wait a whole extra cycle.
+        assertTrue(PollingPolicy.worldDue(now - 29 * minute, now))
+        assertTrue(PollingPolicy.worldDue(now - 45 * minute, now))
     }
 }

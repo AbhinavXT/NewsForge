@@ -31,4 +31,35 @@ object PollingPolicy {
 
     fun intervalMillisAt(nowMillis: Long): Long? =
         intervalMillisFor(MarketClock.phase(nowMillis))
+
+    /**
+     * World feeds while the World tab is on screen.
+     *
+     * Flat and round the clock: general news does not keep market hours, and nothing in
+     * it is worth having within the minute. Ten minutes is enough to see a story break
+     * without spending a request per feed every tick on eighty feeds.
+     */
+    const val WORLD_FOREGROUND_MS: Long = 10 * 60_000L
+
+    /**
+     * World feeds from the background worker.
+     *
+     * The worker runs every fifteen minutes for the market's sake; the world feeds ride
+     * along on every other run at most. Their stories are read when the app is opened,
+     * and the tab refreshes itself on open, so a fresher background copy would mostly be
+     * data spent on stories that are superseded before anyone looks.
+     */
+    const val WORLD_BACKGROUND_MS: Long = 30 * 60_000L
+
+    /**
+     * Whether a background run should include the world feeds.
+     *
+     * A small allowance under the interval, because WorkManager's fifteen minutes is a
+     * floor, not a clock: runs drift by a minute or two, and a strict comparison would
+     * skip the run that was meant to be due and wait a whole extra cycle.
+     */
+    fun worldDue(lastSyncedAtMillis: Long, nowMillis: Long): Boolean =
+        nowMillis - lastSyncedAtMillis >= WORLD_BACKGROUND_MS - WORLD_DRIFT_MS
+
+    private const val WORLD_DRIFT_MS: Long = 3 * 60_000L
 }

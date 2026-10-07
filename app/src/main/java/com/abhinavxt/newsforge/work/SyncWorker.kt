@@ -1,5 +1,8 @@
 package com.abhinavxt.newsforge.work
 
+import com.abhinavxt.newsforge.core.model.Desk
+import com.abhinavxt.newsforge.core.rank.PollingPolicy
+
 import android.content.Context
 import android.util.Log
 import androidx.work.BackoffPolicy
@@ -66,7 +69,15 @@ class SyncWorker(
             // Before the refresh: a company listed this week should be taggable in the
             // articles this very sync is about to store, not in tomorrow's.
             tolerate(TAG, "company list") { container.instrumentRepository.refresh() }
-            val report = repository.refresh()
+            // The world feeds ride along only when due: every run is the market's
+            // fifteen minutes, and eighty general-news feeds have no use for that pace.
+            val now = System.currentTimeMillis()
+            val desks = if (PollingPolicy.worldDue(repository.lastSyncedAt(Desk.WORLD), now)) {
+                setOf(Desk.MARKETS, Desk.WORLD)
+            } else {
+                setOf(Desk.MARKETS)
+            }
+            val report = repository.refresh(desks = desks)
             syncQuotes(container)
             // After quotes, so the sweep sees the prices this sync just sampled; before
             // alerts, only because it is cheap and ordering it last would change nothing.

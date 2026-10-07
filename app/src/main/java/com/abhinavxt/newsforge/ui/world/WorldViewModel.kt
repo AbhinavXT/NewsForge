@@ -15,7 +15,11 @@ import com.abhinavxt.newsforge.core.model.Desk
 import com.abhinavxt.newsforge.data.NewsRepository
 import com.abhinavxt.newsforge.data.SavedArticles
 import com.abhinavxt.newsforge.data.model.ScoredArticle
+import com.abhinavxt.newsforge.core.rank.PollingPolicy
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -135,12 +139,12 @@ class WorldViewModel(
 
     fun clearFilters() = filter.update { WorldFilter() }
 
-    fun refresh() {
+    fun refresh(minGapMillis: Long = 0L) {
         if (refreshing.value) return
         refreshing.value = true
         viewModelScope.launch {
             try {
-                val report = repository.refresh()
+                val report = repository.refresh(minGapMillis, desks = setOf(Desk.WORLD))
                 lastError.value = when {
                     report.allFailed -> "No feeds reachable — check the connection"
                     else -> null
@@ -152,6 +156,23 @@ class WorldViewModel(
             } finally {
                 refreshing.value = false
             }
+        }
+    }
+
+    /**
+     * Keeps the world feeds fresh while the tab is on screen.
+     *
+     * Runs only while the World tab is composed and the app is in front, so it costs
+     * nothing on the market tabs. On arrival it refreshes straight away if the last world
+     * sync is older than one interval — opening the tab in the evening should not show
+     * the afternoon's news for another ten minutes.
+     */
+    suspend fun autoRefreshWhileVisible() {
+        val interval = PollingPolicy.WORLD_FOREGROUND_MS
+        if (clock() - repository.lastSyncedAt(Desk.WORLD) >= interval) refresh(minGapMillis = interval)
+        while (currentCoroutineContext().isActive) {
+            delay(interval)
+            if (!refreshing.value) refresh(minGapMillis = interval)
         }
     }
 

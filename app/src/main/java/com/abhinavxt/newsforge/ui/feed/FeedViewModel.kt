@@ -11,6 +11,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.abhinavxt.newsforge.core.model.Desk
 import com.abhinavxt.newsforge.core.model.CategoryGroup
 import com.abhinavxt.newsforge.core.desk.DeskPayload
 import com.abhinavxt.newsforge.data.DeskRepository
@@ -382,7 +383,7 @@ class FeedViewModel(
         refreshing.value = true
         viewModelScope.launch {
             try {
-                val report = repository.refresh(minGapMillis)
+                val report = repository.refresh(minGapMillis, desks = setOf(Desk.MARKETS))
                 lastError.value = when {
                     report.allFailed -> "No feeds reachable — check the connection"
                     report.failedFeeds.isNotEmpty() ->

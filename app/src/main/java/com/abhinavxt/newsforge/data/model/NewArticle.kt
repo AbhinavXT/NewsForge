@@ -97,6 +97,14 @@ data class SyncReport(
     val candidates: List<com.abhinavxt.newsforge.core.notify.AlertCandidate> = emptyList(),
     /** True when the store was empty before this sync — suppresses the initial barrage. */
     val firstRun: Boolean = false,
+    /**
+     * World stories genuinely inserted this sync.
+     *
+     * Apart from [candidates] because they answer to different rules: nothing in the
+     * market alert policy applies to them, and the only thing that may ring for one is a
+     * keyword the reader chose to follow.
+     */
+    val worldArrivals: List<com.abhinavxt.newsforge.core.notify.AlertCandidate> = emptyList(),
 ) {
     val newArticles: Int get() = outcomes.sumOf { it.itemsNew }
     val failedFeeds: List<FeedOutcome> get() = outcomes.filter { it.status == FeedOutcome.Status.FAILED }

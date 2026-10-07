@@ -1,5 +1,7 @@
 package com.abhinavxt.newsforge.work
 
+import com.abhinavxt.newsforge.core.model.Desk
+
 import android.app.ForegroundServiceStartNotAllowedException
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -109,7 +111,11 @@ class MarketWatchWorker(
             // against the previous poll's positions — wrong in exactly the window that
             // matters, the minutes after you open or close something.
             syncDesk(container)
-            val report = tolerate(TAG, "refresh") { container.repository.refresh() }
+            val report = tolerate(TAG, "refresh") {
+                // Markets only. The watch ticks every minute through the session, and
+                // the world feeds have their own, much slower schedule in the sync.
+                container.repository.refresh(desks = setOf(Desk.MARKETS))
+            }
             syncQuotes(container)
             // Every tick, not only the periodic sync's: this is the stretch of the day an
             // alert is worth most, and the watch used to store the session's news without

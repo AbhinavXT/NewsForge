@@ -147,8 +147,11 @@ class NewsRepository(
     /** Serialises refreshes; a manual pull during a scheduled sync must not double-insert. */
     private val refreshLock = Mutex()
 
-    /** Last completed refresh. Read and written under [refreshLock] only. */
-    private var lastReport: SyncReport? = null
+    /**
+     * Last completed refresh per set of desks asked for. Read and written under
+     * [refreshLock] only.
+     */
+    private val lastReports = HashMap<Set<Desk>, SyncReport>()
 
     // ------------------------------------------------------------------ read
 
@@ -805,6 +808,9 @@ class NewsRepository(
     suspend fun storyForLink(link: String): ArticleSummary? =
         withContext(ioDispatcher) { articleDao.storyForLink(link)?.toSummary() }
 
+    /** When [desk] last finished a refresh, or 0 if never. */
+    fun lastSyncedAt(desk: Desk): Long = feedPreferences.lastSyncedAt(desk)
+
     /** The same story as each outlet carried it. */
     suspend fun coverage(clusterId: String): List<CoverageRow> =
         withContext(ioDispatcher) { articleDao.coverage(clusterId) }
@@ -815,7 +821,12 @@ class NewsRepository(
     // ----------------------------------------------------------------- write
 
     /**
-     * Polls every enabled feed and stores what is new.
+     * Polls the enabled feeds of [desks] and stores what is new.
+     *
+     * Split by desk because the two halves of the app want different cadences: market
+     * feeds by the minute while the market is open, world feeds every half hour or so
+     * around the clock. Fetching both every time would put eighty general-news requests
+     * into every one-minute market tick.
      *
      * @param minGapMillis when a refresh finished less than this ago, that refresh's
      *   report is returned instead of polling again. Zero, the default, always fetches.
@@ -826,8 +837,11 @@ class NewsRepository(
      *   request it just made. Most answer 304, but that is still a round trip per feed
      *   for nothing, on mobile data, during the session.
      */
-    suspend fun refresh(minGapMillis: Long = 0L): SyncReport = refreshLock.withLock {
-        val previousRun = lastReport
+    suspend fun refresh(
+        minGapMillis: Long = 0L,
+        desks: Set<Desk> = ALL_DESKS,
+    ): SyncReport = refreshLock.withLock {
+        val previousRun = lastReports[desks]
         if (previousRun != null && minGapMillis > 0L &&
             clock() - previousRun.finishedAt < minGapMillis
         ) {
@@ -862,8 +876,9 @@ class NewsRepository(
                 )
             }
 
-            val feeds = activeFeeds()
+            val feeds = activeFeeds().filter { (it.categoryHint?.desk ?: Desk.MARKETS) in desks }
             val tagger = lexicon()
+            val worldArrivals = ArrayList<AlertCandidate>()
             // Primed once, ahead of the fan-out rather than lazily on the first NSE feed.
             // The cookie jar is shared, so parallel NSE requests would otherwise each
             // decide they needed priming and race to install the same session.
@@ -879,7 +894,11 @@ class NewsRepository(
             for (attempt in retryRejectedNse(fetchAll(feeds))) {
                 val desk = attempt.feed.categoryHint?.desk ?: Desk.MARKETS
                 val window = windows.getOrPut(desk) { ArrayList() }
-                outcomes += ingest(attempt, window, candidates, tagger)
+                outcomes += ingest(
+                    attempt, window,
+                    if (desk == Desk.WORLD) worldArrivals else candidates,
+                    tagger,
+                )
             }
 
             // Compacted, then deleted at the far floor. Compaction is not counted as
@@ -892,10 +911,12 @@ class NewsRepository(
             // Calendar entries are kept far longer than articles: a results date that
             // has passed is still the anchor for the next one.
             calendarDao.pruneOlderThan(clock() - CALENDAR_KEEP_MS)
-            SyncReport(startedAt, clock(), outcomes, pruned, candidates, firstRun)
+            val finished = clock()
+            for (desk in desks) feedPreferences.setLastSyncedAt(desk, finished)
+            SyncReport(startedAt, finished, outcomes, pruned, candidates, firstRun, worldArrivals)
         }
 
-        lastReport = report
+        lastReports[desks] = report
         report
     }
 
@@ -1147,10 +1168,10 @@ class NewsRepository(
         for ((index, id) in rowIds.withIndex()) {
             if (id != -1L) accepted += entities[index].id
         }
-        // World stories are stored but never offered for alerts. Every alert rule is about
-        // a market event or a company you follow, and none of them should ring for a
-        // football score.
-        return alerts.filter { it.id in accepted && it.category.desk == Desk.MARKETS }
+        // The caller files these by desk: market rows go to the alert policy, world rows
+        // only to keyword alerts. Every market alert rule is about a market event or a
+        // company you follow, and none of them should ring for a football score.
+        return alerts.filter { it.id in accepted }
     }
 
     private suspend fun recordSuccess(
@@ -1207,6 +1228,7 @@ class NewsRepository(
     companion object {
         private const val TAG = "NewsRepository"
 
+        private val ALL_DESKS: Set<Desk> = Desk.entries.toSet()
         private val MARKET_CATEGORIES = Category.namesOn(Desk.MARKETS)
         private val WORLD_CATEGORIES = Category.namesOn(Desk.WORLD)
 

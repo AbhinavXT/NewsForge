@@ -1,5 +1,7 @@
 package com.abhinavxt.newsforge.data
 
+import com.abhinavxt.newsforge.core.model.Desk
+
 import android.content.Context
 
 /**
@@ -31,7 +33,20 @@ class FeedPreferences(context: Context) {
         get() = prefs.getStringSet(KEY_CORRECTIONS, emptySet())?.toSet() ?: emptySet()
         set(value) = prefs.edit().putStringSet(KEY_CORRECTIONS, value.toSet()).apply()
 
+    /**
+     * When each desk last finished a refresh, or 0 if never.
+     *
+     * Persisted rather than held in the repository, because the background worker decides
+     * from it whether the World feeds are due, and WorkManager is free to run that worker
+     * in a process that has never seen the last refresh.
+     */
+    fun lastSyncedAt(desk: Desk): Long = prefs.getLong(KEY_SYNCED_PREFIX + desk.name, 0L)
+
+    fun setLastSyncedAt(desk: Desk, millis: Long) =
+        prefs.edit().putLong(KEY_SYNCED_PREFIX + desk.name, millis).apply()
+
     private companion object {
+        const val KEY_SYNCED_PREFIX = "last_synced_"
         const val KEY_SEEDED = "ever_seeded"
         const val KEY_CORRECTIONS = "corrections_applied"
     }

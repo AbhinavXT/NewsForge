@@ -452,6 +452,11 @@ fun NewsForgeRoot(
                                 factory = WorldViewModel.factory(repository, savedArticles),
                             )
                             val worldState by worldViewModel.uiState.collectAsStateWithLifecycle()
+                            LaunchedEffect(lifecycleOwner) {
+                                lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                                    worldViewModel.autoRefreshWhileVisible()
+                                }
+                            }
                             WorldScreen(
                                 state = worldState,
                                 onOpenStory = { scored ->
