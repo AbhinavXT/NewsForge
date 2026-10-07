@@ -42,6 +42,13 @@ data class StoryRow(
 )
 
 /** One outlet's version of a story. */
+/** One outlet's text for a story; see [ArticleDao.clusterTexts]. */
+data class ClusterTextRow(
+    val sourceName: String,
+    val title: String,
+    val summary: String?,
+)
+
 data class CoverageRow(
     val id: String,
     val title: String,
@@ -332,6 +339,13 @@ interface ArticleDao {
             "WHERE clusterId = :clusterId GROUP BY sourceName ORDER BY publishedAt"
     )
     suspend fun coverage(clusterId: String): List<CoverageRow>
+
+    /** Every outlet's headline and summary for one story, for the cross-outlet brief. */
+    @Query(
+        "SELECT sourceName, title, summary FROM article " +
+            "WHERE clusterId = :clusterId GROUP BY sourceName ORDER BY publishedAt LIMIT :limit"
+    )
+    suspend fun clusterTexts(clusterId: String, limit: Int = OUTLET_LIMIT): List<ClusterTextRow>
 
     /** Saved stories with no offline copy yet, for the background pass that makes them. */
     @Query(

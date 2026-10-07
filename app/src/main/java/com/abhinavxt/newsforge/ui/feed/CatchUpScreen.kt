@@ -247,6 +247,7 @@ private fun StoryHead(article: ArticleSummary, nowMillis: Long) {
                 modifier = Modifier.padding(top = 14.dp),
             )
         }
+        AcrossOutlets(article.clusterId, article.title)
     }
 }
 

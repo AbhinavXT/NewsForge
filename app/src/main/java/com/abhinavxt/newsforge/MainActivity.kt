@@ -1,5 +1,7 @@
 package com.abhinavxt.newsforge
 
+import androidx.compose.runtime.CompositionLocalProvider
+import com.abhinavxt.newsforge.ui.feed.LocalStoryBriefs
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -52,38 +54,44 @@ class MainActivity : ComponentActivity() {
             Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
         setContent {
             NewsForgeTheme {
-                NewsForgeRoot(
-                    repository = container.repository,
-                    deskRepository = container.deskRepository,
-                    quoteRepository = container.quoteRepository,
-                    candleRepository = container.candleRepository,
-                    symbolDirectory = container.symbolDirectory,
-                    priceHistoryRepository = container.priceHistoryRepository,
-                    volumeHistoryRepository = container.volumeHistoryRepository,
-                    instrumentRepository = container.instrumentRepository,
-                    alertPreferences = container.alertPreferences,
-                    deskPreferences = container.deskPreferences,
-                    watchPreferences = container.watchPreferences,
-                    appearancePreferences = container.appearancePreferences,
-                    worldPreferences = container.worldPreferences,
-                    readerDeps = ReaderDeps(
-                        reader = container.readerRepository,
-                        news = container.repository,
-                        saved = container.savedArticles,
-                        preferences = container.readerPreferences,
-                        lexicon = container::lexicon,
-                    ),
-                    savedArticles = container.savedArticles,
-                    priceAlertRepository = container.priceAlertRepository,
-                    openSymbol = pendingSymbol.value,
-                    onSymbolConsumed = { pendingSymbol.value = null },
-                    openDesk = pendingDesk.value,
-                    onDeskConsumed = { pendingDesk.value = false },
-                    openWorld = pendingWorld.value,
-                    onWorldConsumed = { pendingWorld.value = false },
-                    openStoryLink = pendingStoryLink.value,
-                    onStoryLinkConsumed = { pendingStoryLink.value = null },
-                )
+                CompositionLocalProvider(
+                    LocalStoryBriefs provides { clusterId, title ->
+                        container.repository.storyBrief(clusterId, title)
+                    },
+                ) {
+                    NewsForgeRoot(
+                        repository = container.repository,
+                        deskRepository = container.deskRepository,
+                        quoteRepository = container.quoteRepository,
+                        candleRepository = container.candleRepository,
+                        symbolDirectory = container.symbolDirectory,
+                        priceHistoryRepository = container.priceHistoryRepository,
+                        volumeHistoryRepository = container.volumeHistoryRepository,
+                        instrumentRepository = container.instrumentRepository,
+                        alertPreferences = container.alertPreferences,
+                        deskPreferences = container.deskPreferences,
+                        watchPreferences = container.watchPreferences,
+                        appearancePreferences = container.appearancePreferences,
+                        worldPreferences = container.worldPreferences,
+                        readerDeps = ReaderDeps(
+                            reader = container.readerRepository,
+                            news = container.repository,
+                            saved = container.savedArticles,
+                            preferences = container.readerPreferences,
+                            lexicon = container::lexicon,
+                        ),
+                        savedArticles = container.savedArticles,
+                        priceAlertRepository = container.priceAlertRepository,
+                        openSymbol = pendingSymbol.value,
+                        onSymbolConsumed = { pendingSymbol.value = null },
+                        openDesk = pendingDesk.value,
+                        onDeskConsumed = { pendingDesk.value = false },
+                        openWorld = pendingWorld.value,
+                        onWorldConsumed = { pendingWorld.value = false },
+                        openStoryLink = pendingStoryLink.value,
+                        onStoryLinkConsumed = { pendingStoryLink.value = null },
+                    )
+                }
             }
         }
     }

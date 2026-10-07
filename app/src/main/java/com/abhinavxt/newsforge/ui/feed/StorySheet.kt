@@ -160,6 +160,8 @@ fun StorySheet(
                 )
             }
 
+            AcrossOutlets(article.clusterId, article.title)
+
             if (moveProbability != null) {
                 LearnedExplainer(moveProbability, drivers)
             } else {

@@ -18,6 +18,9 @@ import com.abhinavxt.newsforge.core.learn.ImportanceModel
 import com.abhinavxt.newsforge.core.search.SearchQuery
 import com.abhinavxt.newsforge.core.model.Category
 import com.abhinavxt.newsforge.core.model.Desk
+import com.abhinavxt.newsforge.core.summary.OutletText
+import com.abhinavxt.newsforge.core.summary.StoryBrief
+import com.abhinavxt.newsforge.core.summary.StoryBriefs
 import com.abhinavxt.newsforge.core.model.FeedSource
 import com.abhinavxt.newsforge.core.model.SourceTier
 import com.abhinavxt.newsforge.core.rank.MarketClock
@@ -807,6 +810,20 @@ class NewsRepository(
     /** The stored story a link belongs to, or null for a link the feed never carried. */
     suspend fun storyForLink(link: String): ArticleSummary? =
         withContext(ioDispatcher) { articleDao.storyForLink(link)?.toSummary() }
+
+    /**
+     * What a story's outlets agree on, or null when there is too little to say.
+     *
+     * Read on demand rather than with the feed: the feed query carries one row per story,
+     * and pulling every outlet's summary for every story to build briefs nobody opened
+     * would be most of a cursor window spent on nothing.
+     */
+    suspend fun storyBrief(clusterId: String, title: String): StoryBrief? =
+        withContext(computeDispatcher) {
+            val texts = withContext(ioDispatcher) { articleDao.clusterTexts(clusterId) }
+            if (texts.size < 2) return@withContext null
+            StoryBriefs.summarize(title, texts.map { OutletText(it.sourceName, it.title, it.summary) })
+        }
 
     /** When [desk] last finished a refresh, or 0 if never. */
     fun lastSyncedAt(desk: Desk): Long = feedPreferences.lastSyncedAt(desk)
