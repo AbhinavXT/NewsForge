@@ -1152,6 +1152,7 @@ class NewsRepository(
                 tier = article.tier,
                 publishedAt = article.publishedAt,
                 symbols = article.symbols,
+                summary = article.summary,
             )
             window += ClusterMember(
                 clusterId = clusterId,

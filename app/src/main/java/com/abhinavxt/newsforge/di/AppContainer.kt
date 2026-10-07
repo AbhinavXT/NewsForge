@@ -19,6 +19,7 @@ import com.abhinavxt.newsforge.data.ReaderRepository
 import com.abhinavxt.newsforge.data.SavedArticles
 import com.abhinavxt.newsforge.data.VolumeHistoryRepository
 import com.abhinavxt.newsforge.data.WatchPreferences
+import com.abhinavxt.newsforge.data.WorldPreferences
 import com.abhinavxt.newsforge.data.db.NewsForgeDatabase
 import com.abhinavxt.newsforge.data.net.FeedFetcher
 import com.abhinavxt.newsforge.data.tag.InstrumentRepository
@@ -51,6 +52,8 @@ class AppContainer(context: Context) {
     val watchPreferences: WatchPreferences by lazy { WatchPreferences(appContext) }
 
     val appearancePreferences: AppearancePreferences by lazy { AppearancePreferences(appContext) }
+
+    val worldPreferences: WorldPreferences by lazy { WorldPreferences(appContext) }
 
     val notifier: Notifier by lazy { Notifier(appContext) }
 

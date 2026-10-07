@@ -1,5 +1,7 @@
 package com.abhinavxt.newsforge.work
 
+import com.abhinavxt.newsforge.core.notify.AlertCandidate
+import com.abhinavxt.newsforge.core.world.KeywordAlerts
 import android.util.Log
 import com.abhinavxt.newsforge.core.desk.DeskMessage
 import com.abhinavxt.newsforge.core.mute.MuteRule
@@ -250,3 +252,34 @@ private suspend fun postQuietDigest(
 
 /** How far back to look for an existing alert on the same story. */
 private const val STORY_DEDUPE_WINDOW_MS = 48L * 60 * 60 * 1000
+
+/**
+ * Rings for new world stories that mention a followed keyword.
+ *
+ * Under the same master switch and quiet hours as market alerts — one "alerts off" should
+ * mean off — but otherwise its own rules, in [KeywordAlerts].
+ */
+internal suspend fun postWorldKeywordAlerts(
+    container: AppContainer,
+    arrivals: List<AlertCandidate>,
+    firstSync: Boolean,
+) {
+    if (arrivals.isEmpty()) return
+    val world = container.worldPreferences.current()
+    if (!world.keywordAlerts || world.keywords.isEmpty()) return
+    val settings = container.alertPreferences.settings()
+    if (!settings.enabled) return
+    val now = System.currentTimeMillis()
+    if (NotificationPolicy.isQuiet(now, settings)) return
+
+    val repository = container.repository
+    val alerts = KeywordAlerts.select(
+        arrivals = arrivals,
+        keywords = world.keywords,
+        alreadyNotified = repository.alreadyNotified(now - STORY_DEDUPE_WINDOW_MS),
+        firstSync = firstSync,
+    )
+    if (alerts.isEmpty()) return
+    val posted = container.notifier.postWorldKeywords(alerts)
+    if (posted.isNotEmpty()) repository.markNotified(posted.map { it.candidate.clusterId })
+}

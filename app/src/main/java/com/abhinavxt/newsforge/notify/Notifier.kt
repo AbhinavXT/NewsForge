@@ -28,6 +28,8 @@ import com.abhinavxt.newsforge.core.notify.NotificationActions
 import com.abhinavxt.newsforge.core.notify.ShadeAlert
 import com.abhinavxt.newsforge.core.quote.PriceAlertHit
 import com.abhinavxt.newsforge.core.quote.PriceAlerts
+import com.abhinavxt.newsforge.core.world.KeywordAlert
+import com.abhinavxt.newsforge.data.model.ArticleSummary
 
 /**
  * Posts alerts.
@@ -74,6 +76,17 @@ class Notifier(private val context: Context) {
                 NotificationManager.IMPORTANCE_DEFAULT,
             ).apply {
                 description = "Large deals, orders and policy across the market"
+            }
+        )
+        // Its own channel, so general news can be silenced without touching anything
+        // about the market, and the other way round.
+        manager.createNotificationChannel(
+            NotificationChannel(
+                CHANNEL_WORLD,
+                "World news",
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ).apply {
+                description = "Stories about what you follow, and the evening world digest"
             }
         )
     }
@@ -535,6 +548,95 @@ class Notifier(private val context: Context) {
         }
     }
 
+    /**
+     * One notification per followed-keyword story, opening it in the reader.
+     *
+     * @return the alerts that reached the shade, for the caller to mark as notified.
+     */
+    fun postWorldKeywords(alerts: List<KeywordAlert>): List<KeywordAlert> {
+        if (alerts.isEmpty() || !canPost()) return emptyList()
+        ensureChannels()
+        val posted = ArrayList<KeywordAlert>(alerts.size)
+        for (alert in alerts) {
+            val story = alert.candidate
+            val id = "world#${story.clusterId}".hashCode()
+            val notification = NotificationCompat.Builder(context, CHANNEL_WORLD)
+                .setSmallIcon(R.drawable.ic_stat_newsforge)
+                .setContentTitle(story.title)
+                .setContentText("${alert.keyword} · ${story.sourceName}")
+                .setStyle(NotificationCompat.BigTextStyle().bigText(story.title))
+                .setSubText("Following")
+                .setWhen(story.publishedAt)
+                .setShowWhen(true)
+                .setContentIntent(openIntent(story.link, story.clusterId, "world#${story.id}"))
+                .setAutoCancel(true)
+                .setGroup(GROUP_WORLD)
+                .setCategory(NotificationCompat.CATEGORY_RECOMMENDATION)
+                .build()
+            try {
+                NotificationManagerCompat.from(context).notify(id, notification)
+                posted += alert
+            } catch (e: SecurityException) {
+                Log.w(TAG, "World alert refused", e)
+                break
+            }
+        }
+        return posted
+    }
+
+    /**
+     * The evening world digest: the day's top stories in one quiet notification.
+     *
+     * Silent, because it arrives on a schedule the reader chose rather than because
+     * something happened, and opens the World tab rather than one story.
+     *
+     * @return whether it reached the shade.
+     */
+    fun postWorldDigest(stories: List<ArticleSummary>): Boolean {
+        if (stories.isEmpty() || !canPost()) return false
+        ensureChannels()
+        val title = "Today in the world"
+        val style = NotificationCompat.InboxStyle().setBigContentTitle(title)
+        for (story in stories) style.addLine("${story.category.label} · ${story.title}")
+        val intent = Intent(context, MainActivity::class.java).apply {
+            putExtra(MainActivity.EXTRA_OPEN_WORLD, true)
+            addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        }
+        val notification = NotificationCompat.Builder(context, CHANNEL_WORLD)
+            .setSmallIcon(R.drawable.ic_stat_newsforge)
+            .setContentTitle(title)
+            .setContentText(stories.first().title)
+            .setStyle(style)
+            .setContentIntent(
+                PendingIntent.getActivity(
+                    context,
+                    "world-digest".hashCode(),
+                    intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
+            )
+            .setAutoCancel(true)
+            .setSilent(true)
+            .setCategory(NotificationCompat.CATEGORY_RECOMMENDATION)
+            .addAction(
+                R.drawable.ic_done_all,
+                "Mark all read",
+                markAllReadIntent(
+                    clusterIds = stories.map { it.clusterId },
+                    notificationIds = listOf(WORLD_DIGEST_ID),
+                    requestKey = "mark-all#world-digest",
+                ),
+            )
+            .build()
+        return try {
+            NotificationManagerCompat.from(context).notify(WORLD_DIGEST_ID, notification)
+            true
+        } catch (e: SecurityException) {
+            Log.w(TAG, "World digest refused", e)
+            false
+        }
+    }
+
     /** Marks a group's stories read and clears it, without opening the app. */
     private fun markAllReadIntent(
         clusterIds: List<String>,
@@ -638,6 +740,9 @@ class Notifier(private val context: Context) {
         const val CHANNEL_DESK = "alerts_desk"
         const val CHANNEL_PRICE = "alerts_price"
         private const val DIGEST_ID = 4301
+        private const val WORLD_DIGEST_ID = 4302
+        const val CHANNEL_WORLD = "world_news"
+        private const val GROUP_WORLD = "newsforge_world"
         private const val GROUP_PRICE = "newsforge_price"
         private const val EXTRA_ALERT_CLUSTER = "newsforge.alert.cluster"
         private const val GROUP_HIGH = "newsforge_alerts_high"

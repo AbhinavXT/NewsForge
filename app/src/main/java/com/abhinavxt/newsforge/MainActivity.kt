@@ -25,6 +25,7 @@ class MainActivity : ComponentActivity() {
     /** Symbol from a tapped event reminder, consumed once by the composition. */
     private val pendingSymbol = mutableStateOf<String?>(null)
     private val pendingDesk = mutableStateOf(false)
+    private val pendingWorld = mutableStateOf(false)
     private val pendingStoryLink = mutableStateOf<String?>(null)
 
     /**
@@ -64,6 +65,7 @@ class MainActivity : ComponentActivity() {
                     deskPreferences = container.deskPreferences,
                     watchPreferences = container.watchPreferences,
                     appearancePreferences = container.appearancePreferences,
+                    worldPreferences = container.worldPreferences,
                     readerDeps = ReaderDeps(
                         reader = container.readerRepository,
                         news = container.repository,
@@ -77,6 +79,8 @@ class MainActivity : ComponentActivity() {
                     onSymbolConsumed = { pendingSymbol.value = null },
                     openDesk = pendingDesk.value,
                     onDeskConsumed = { pendingDesk.value = false },
+                    openWorld = pendingWorld.value,
+                    onWorldConsumed = { pendingWorld.value = false },
                     openStoryLink = pendingStoryLink.value,
                     onStoryLinkConsumed = { pendingStoryLink.value = null },
                 )
@@ -102,6 +106,10 @@ class MainActivity : ComponentActivity() {
             // after they have navigated away from it.
             intent.removeExtra(EXTRA_OPEN_DESK)
             pendingDesk.value = true
+        }
+        if (intent?.getBooleanExtra(EXTRA_OPEN_WORLD, false) == true) {
+            intent.removeExtra(EXTRA_OPEN_WORLD)
+            pendingWorld.value = true
         }
         intent?.getStringExtra(EXTRA_SYMBOL)?.let { symbol ->
             intent.removeExtra(EXTRA_SYMBOL)
@@ -149,5 +157,8 @@ class MainActivity : ComponentActivity() {
 
         /** Set by a desk-signal notification: the message is not about an article. */
         const val EXTRA_OPEN_DESK = "open_desk"
+
+        /** Set by the world digest: it is about the day's news, not one story. */
+        const val EXTRA_OPEN_WORLD = "open_world"
     }
 }

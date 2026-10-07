@@ -13,7 +13,10 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.abhinavxt.newsforge.core.model.Category
 import com.abhinavxt.newsforge.core.model.Desk
 import com.abhinavxt.newsforge.data.NewsRepository
+import com.abhinavxt.newsforge.core.world.Keywords
 import com.abhinavxt.newsforge.data.SavedArticles
+import com.abhinavxt.newsforge.data.WorldPreferences
+import com.abhinavxt.newsforge.data.WorldSettings
 import com.abhinavxt.newsforge.data.model.ScoredArticle
 import com.abhinavxt.newsforge.core.rank.PollingPolicy
 import kotlinx.coroutines.CancellationException
@@ -39,10 +42,12 @@ data class WorldFilter(
     val topic: Category? = null,
     val unreadOnly: Boolean = false,
     val savedOnly: Boolean = false,
+    /** Only stories mentioning a followed keyword. */
+    val followingOnly: Boolean = false,
     val query: String = "",
 ) {
     val isNarrowed: Boolean
-        get() = topic != null || unreadOnly || savedOnly || query.isNotBlank()
+        get() = topic != null || unreadOnly || savedOnly || followingOnly || query.isNotBlank()
 }
 
 sealed interface WorldUiState {
@@ -57,6 +62,13 @@ sealed interface WorldUiState {
     data class Ready(
         val stories: List<ScoredArticle>,
         val topicCounts: Map<Category, Int>,
+        /**
+         * Stories mentioning a followed keyword, ranked, each with the keyword it matched.
+         * Unaffected by the topic chip: following "ISRO" means wanting it whichever topic
+         * the story was filed under.
+         */
+        val following: List<Pair<ScoredArticle, String>>,
+        val settings: WorldSettings,
         val filter: WorldFilter,
         val refreshing: Boolean,
         val lastError: String?,
@@ -78,6 +90,7 @@ sealed interface WorldUiState {
 class WorldViewModel(
     private val repository: NewsRepository,
     private val savedArticles: SavedArticles,
+    private val preferences: WorldPreferences,
     private val clock: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
 
@@ -109,17 +122,30 @@ class WorldViewModel(
         filter,
         refreshing,
         lastError,
-    ) { all, filter, refreshing, error ->
+        preferences.settings,
+    ) { all, filter, refreshing, error, settings ->
         if (all == null) return@combine WorldUiState.Loading
-        val beforeTopic = all.filter { scored ->
+        // A hidden topic is gone everywhere — chips, sections, search — except when it is
+        // the topic explicitly selected, which only happens as it is being hidden.
+        val shown = all.filter { it.article.category !in settings.hidden }
+        val matched = shown.mapNotNull { scored ->
+            Keywords.firstMatch(settings.keywords, scored.article.title, scored.article.summary)
+                ?.let { scored to it }
+        }
+        val matchedIds = matched.mapTo(HashSet()) { it.first.article.clusterId }
+        val beforeTopic = shown.filter { scored ->
             val article = scored.article
-            (!filter.unreadOnly || !article.read) && (!filter.savedOnly || article.saved)
+            (!filter.unreadOnly || !article.read) &&
+                (!filter.savedOnly || article.saved) &&
+                (!filter.followingOnly || article.clusterId in matchedIds)
         }
         WorldUiState.Ready(
             stories = beforeTopic.filter { filter.topic == null || it.article.category == filter.topic },
-            topicCounts = Category.WORLD_TOPICS.associateWith { topic ->
+            topicCounts = settings.visibleTopics.associateWith { topic ->
                 beforeTopic.count { it.article.category == topic }
             },
+            following = matched,
+            settings = settings,
             filter = filter,
             refreshing = refreshing,
             lastError = error,
@@ -134,6 +160,29 @@ class WorldViewModel(
     fun toggleUnreadOnly() = filter.update { it.copy(unreadOnly = !it.unreadOnly) }
 
     fun toggleSavedOnly() = filter.update { it.copy(savedOnly = !it.savedOnly) }
+
+    fun toggleFollowingOnly() = filter.update { it.copy(followingOnly = !it.followingOnly) }
+
+    fun setTopicHidden(topic: Category, hidden: Boolean) {
+        preferences.setHidden(topic, hidden)
+        // Hiding the selected topic would leave an empty list with no chip to clear it.
+        if (hidden) filter.update { if (it.topic == topic) it.copy(topic = null) else it }
+    }
+
+    fun moveTopic(topic: Category, by: Int) = preferences.move(topic, by)
+
+    fun resetTopics() = preferences.resetTopics()
+
+    /** @return false when the keyword was rejected, so the field can say so. */
+    fun addKeyword(keyword: String): Boolean = preferences.addKeyword(keyword)
+
+    fun removeKeyword(keyword: String) = preferences.removeKeyword(keyword)
+
+    fun setKeywordAlerts(enabled: Boolean) = preferences.setKeywordAlerts(enabled)
+
+    fun setDigestEnabled(enabled: Boolean) = preferences.setDigestEnabled(enabled)
+
+    fun setDigestHour(hour: Int) = preferences.setDigestHour(hour)
 
     fun setQuery(query: String) = filter.update { it.copy(query = query) }
 
@@ -219,8 +268,9 @@ class WorldViewModel(
         fun factory(
             repository: NewsRepository,
             savedArticles: SavedArticles,
+            preferences: WorldPreferences,
         ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { WorldViewModel(repository, savedArticles) }
+            initializer { WorldViewModel(repository, savedArticles, preferences) }
         }
     }
 }

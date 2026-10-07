@@ -91,7 +91,9 @@ import com.abhinavxt.newsforge.ui.desk.DeskViewModel
 import com.abhinavxt.newsforge.ui.feed.FeedScreen
 import com.abhinavxt.newsforge.ui.feed.FeedUiState
 import com.abhinavxt.newsforge.ui.feed.FeedViewModel
+import com.abhinavxt.newsforge.ui.world.WorldCustomiseActions
 import com.abhinavxt.newsforge.ui.world.WorldScreen
+import com.abhinavxt.newsforge.data.WorldPreferences
 import com.abhinavxt.newsforge.ui.world.WorldViewModel
 import com.abhinavxt.newsforge.ui.feed.PriceBook
 import com.abhinavxt.newsforge.ui.feed.CatchUpScreen
@@ -134,6 +136,7 @@ fun NewsForgeRoot(
     deskPreferences: DeskPreferences,
     watchPreferences: WatchPreferences,
     appearancePreferences: AppearancePreferences,
+    worldPreferences: WorldPreferences,
     readerDeps: ReaderDeps,
     priceAlertRepository: PriceAlertRepository,
     savedArticles: SavedArticles,
@@ -141,6 +144,8 @@ fun NewsForgeRoot(
     onSymbolConsumed: () -> Unit = {},
     openDesk: Boolean = false,
     onDeskConsumed: () -> Unit = {},
+    openWorld: Boolean = false,
+    onWorldConsumed: () -> Unit = {},
     openStoryLink: String? = null,
     onStoryLinkConsumed: () -> Unit = {},
 ) {
@@ -217,6 +222,14 @@ fun NewsForgeRoot(
             if (Links.isFile(it)) Links.open(context, it)
             else nav = Nav.pushOn(nav, Tab.NEWS, Detail.Reader(it))
             onStoryLinkConsumed()
+        }
+    }
+
+    // The world digest is about the day rather than one story, so it opens the tab.
+    LaunchedEffect(openWorld) {
+        if (openWorld) {
+            nav = Nav.selectTab(nav.copy(stacks = nav.stacks - Tab.WORLD), Tab.WORLD)
+            onWorldConsumed()
         }
     }
 
@@ -449,7 +462,7 @@ fun NewsForgeRoot(
 
                         Tab.WORLD -> {
                             val worldViewModel: WorldViewModel = viewModel(
-                                factory = WorldViewModel.factory(repository, savedArticles),
+                                factory = WorldViewModel.factory(repository, savedArticles, worldPreferences),
                             )
                             val worldState by worldViewModel.uiState.collectAsStateWithLifecycle()
                             LaunchedEffect(lifecycleOwner) {
@@ -478,9 +491,20 @@ fun NewsForgeRoot(
                                 onSelectTopic = worldViewModel::selectTopic,
                                 onToggleUnread = worldViewModel::toggleUnreadOnly,
                                 onToggleSaved = worldViewModel::toggleSavedOnly,
+                                onToggleFollowing = worldViewModel::toggleFollowingOnly,
                                 onQueryChange = worldViewModel::setQuery,
                                 onClearFilters = worldViewModel::clearFilters,
-                                onRefresh = worldViewModel::refresh,
+                                onRefresh = { worldViewModel.refresh() },
+                                customise = WorldCustomiseActions(
+                                    setTopicHidden = worldViewModel::setTopicHidden,
+                                    moveTopic = worldViewModel::moveTopic,
+                                    resetTopics = worldViewModel::resetTopics,
+                                    addKeyword = worldViewModel::addKeyword,
+                                    removeKeyword = worldViewModel::removeKeyword,
+                                    setKeywordAlerts = worldViewModel::setKeywordAlerts,
+                                    setDigestEnabled = worldViewModel::setDigestEnabled,
+                                    setDigestHour = worldViewModel::setDigestHour,
+                                ),
                             )
                         }
 

@@ -73,13 +73,16 @@ fun WorldScreen(
     onSelectTopic: (Category?) -> Unit,
     onToggleUnread: () -> Unit,
     onToggleSaved: () -> Unit,
+    onToggleFollowing: () -> Unit,
     onQueryChange: (String) -> Unit,
     onClearFilters: () -> Unit,
     onRefresh: () -> Unit,
+    customise: WorldCustomiseActions,
     modifier: Modifier = Modifier,
 ) {
     val ready = state as? WorldUiState.Ready
     var searching by rememberSaveable { mutableStateOf(false) }
+    var customising by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val haptics = LocalHapticFeedback.current
 
@@ -91,6 +94,11 @@ fun WorldScreen(
                 title = "World",
                 subtitle = ready?.let { "${it.stories.size} stories" },
                 actions = {
+                    IconCircleButton(
+                        icon = R.drawable.ic_settings,
+                        contentDescription = "Customise World",
+                        onClick = { customising = true },
+                    )
                     IconCircleButton(
                         icon = if (searching) R.drawable.ic_close else R.drawable.ic_search,
                         contentDescription = if (searching) "Close search" else "Search",
@@ -128,10 +136,13 @@ fun WorldScreen(
                 }
                 TopicRow(
                     counts = ready.topicCounts,
+                    followingCount = ready.following.size,
+                    hasKeywords = ready.settings.keywords.isNotEmpty(),
                     filter = ready.filter,
                     onSelectTopic = onSelectTopic,
                     onToggleUnread = onToggleUnread,
                     onToggleSaved = onToggleSaved,
+                    onToggleFollowing = onToggleFollowing,
                 )
                 ready.lastError?.let { ErrorBanner(it) }
             }
@@ -175,7 +186,7 @@ fun WorldScreen(
                         contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp),
                     ) {
                         when {
-                            ready.stories.isEmpty() -> item {
+                            ready.stories.isEmpty() && ready.following.isEmpty() -> item {
                                 WorldEmptyState(
                                     refreshing = ready.refreshing,
                                     narrowed = ready.filter.isNarrowed,
@@ -190,37 +201,89 @@ fun WorldScreen(
                                 key = { it.article.clusterId },
                             ) { card(it, false, ready.filter.topic == null) }
 
-                            else -> frontPage(ready.stories, card, onSelectTopic)
+                            else -> frontPage(
+                                stories = ready.stories,
+                                following = ready.following.map { it.first },
+                                topics = ready.settings.visibleTopics,
+                                card = card,
+                                onSelectTopic = onSelectTopic,
+                                onShowFollowing = onToggleFollowing,
+                            )
                         }
                     }
                 }
             }
         }
     }
+
+    CustomiseHost(
+        visible = customising,
+        ready = ready,
+        actions = customise,
+        onDismiss = { customising = false },
+    )
+}
+
+@Composable
+private fun CustomiseHost(
+    visible: Boolean,
+    ready: WorldUiState.Ready?,
+    actions: WorldCustomiseActions,
+    onDismiss: () -> Unit,
+) {
+    if (visible && ready != null) {
+        WorldCustomiseSheet(settings = ready.settings, actions = actions, onDismiss = onDismiss)
+    }
 }
 
 /**
- * The unfiltered layout: a short lead, then each topic's best few, in topic order.
+ * The unfiltered layout: what you follow, a short lead, then each topic's best few.
  *
- * The lead is taken out of the sections so no story appears twice. Topics with nothing
- * in the window are skipped rather than shown empty — a heading over no stories reads as
- * a broken feed, and the Feeds tab is where a broken feed should be noticed.
+ * Following comes first because it is the one section the reader asked for by name. Each
+ * story appears once: the lead skips what Following showed and the topics skip both.
+ * Topics with nothing in the window are skipped rather than shown empty — a heading over
+ * no stories reads as a broken feed, and the Feeds tab is where that should be noticed.
+ *
+ * @param topics visible topics in the reader's order.
  */
 private fun LazyListScope.frontPage(
     stories: List<ScoredArticle>,
+    following: List<ScoredArticle>,
+    topics: List<Category>,
     card: @Composable (ScoredArticle, Boolean, Boolean) -> Unit,
     onSelectTopic: (Category?) -> Unit,
+    onShowFollowing: () -> Unit,
 ) {
-    val lead = stories.take(LEAD_COUNT)
-    item(key = "lead-header") { SectionTitle("Top stories") }
-    items(lead, key = { "lead-${it.article.clusterId}" }) { card(it, it === lead.first(), true) }
+    val shown = HashSet<String>()
+    if (following.isNotEmpty()) {
+        item(key = "following-header") {
+            SectionTitle(
+                title = "Following",
+                count = following.size,
+                trailing = if (following.size > PER_TOPIC) {
+                    { TextButton(onClick = onShowFollowing) { Text("See all") } }
+                } else {
+                    null
+                },
+            )
+        }
+        val top = following.take(PER_TOPIC)
+        top.mapTo(shown) { it.article.clusterId }
+        items(top, key = { "following-${it.article.clusterId}" }) { card(it, false, true) }
+    }
 
-    val leadIds = lead.mapTo(HashSet()) { it.article.clusterId }
+    val lead = stories.filterNot { it.article.clusterId in shown }.take(LEAD_COUNT)
+    if (lead.isNotEmpty()) {
+        item(key = "lead-header") { SectionTitle("Top stories") }
+        items(lead, key = { "lead-${it.article.clusterId}" }) { card(it, it === lead.first(), true) }
+    }
+    lead.mapTo(shown) { it.article.clusterId }
+
     val byTopic = stories
-        .filterNot { it.article.clusterId in leadIds }
+        .filterNot { it.article.clusterId in shown }
         .groupBy { it.article.category }
 
-    for (topic in Category.WORLD_TOPICS) {
+    for (topic in topics) {
         val section = byTopic[topic].orEmpty()
         if (section.isEmpty()) continue
         item(key = "header-${topic.name}") {
@@ -239,19 +302,35 @@ private fun LazyListScope.frontPage(
     }
 }
 
+/**
+ * @param counts visible topics, in the reader's order, with their story counts.
+ */
 @Composable
 private fun TopicRow(
     counts: Map<Category, Int>,
+    followingCount: Int,
+    hasKeywords: Boolean,
     filter: WorldFilter,
     onSelectTopic: (Category?) -> Unit,
     onToggleUnread: () -> Unit,
     onToggleSaved: () -> Unit,
+    onToggleFollowing: () -> Unit,
 ) {
     ChipStrip {
         NfChip("All", selected = filter.topic == null, onClick = { onSelectTopic(null) })
+        // Only once something is followed: a chip that can never have anything under it
+        // is a chip to explain.
+        if (hasKeywords) {
+            NfChip(
+                label = "Following",
+                selected = filter.followingOnly,
+                onClick = onToggleFollowing,
+                count = followingCount,
+            )
+        }
         NfChip("Unread", selected = filter.unreadOnly, onClick = onToggleUnread)
         NfChip("Saved", selected = filter.savedOnly, onClick = onToggleSaved)
-        for (topic in Category.WORLD_TOPICS) {
+        for (topic in counts.keys) {
             val count = counts[topic] ?: 0
             // A topic with nothing in it is hidden unless it is the one selected, so
             // clearing it is always possible from where it was chosen.

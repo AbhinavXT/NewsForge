@@ -72,7 +72,8 @@ class SyncWorker(
             // The world feeds ride along only when due: every run is the market's
             // fifteen minutes, and eighty general-news feeds have no use for that pace.
             val now = System.currentTimeMillis()
-            val desks = if (PollingPolicy.worldDue(repository.lastSyncedAt(Desk.WORLD), now)) {
+            val lastWorldSync = repository.lastSyncedAt(Desk.WORLD)
+            val desks = if (PollingPolicy.worldDue(lastWorldSync, now)) {
                 setOf(Desk.MARKETS, Desk.WORLD)
             } else {
                 setOf(Desk.MARKETS)
@@ -87,6 +88,9 @@ class SyncWorker(
             // Tolerated: a notification that fails to post is not a failed sync, and
             // retrying the whole refresh would not help it.
             tolerate(TAG, "story alerts") { postStoryAlerts(container) }
+            tolerate(TAG, "world alerts") {
+                postWorldKeywordAlerts(container, report.worldArrivals, firstSync = lastWorldSync == 0L)
+            }
             postEventReminders(container)
             // Last: copies of saved stories for offline reading are the least urgent
             // thing a sync does, and each is a page download.

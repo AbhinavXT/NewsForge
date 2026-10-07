@@ -20,6 +20,8 @@ data class AlertCandidate(
     val tier: SourceTier,
     val publishedAt: Long,
     val symbols: List<String>,
+    /** For keyword matching on world stories; the market policy reads headlines only. */
+    val summary: String? = null,
 )
 
 /**
