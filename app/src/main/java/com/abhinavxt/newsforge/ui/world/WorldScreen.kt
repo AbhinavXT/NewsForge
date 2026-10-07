@@ -47,6 +47,8 @@ import com.abhinavxt.newsforge.ui.components.ScreenGutter
 import com.abhinavxt.newsforge.ui.components.ScreenHeader
 import com.abhinavxt.newsforge.ui.components.SectionTitle
 import com.abhinavxt.newsforge.ui.components.StorySkeleton
+import com.abhinavxt.newsforge.ui.feed.CATCH_UP_MAX
+import com.abhinavxt.newsforge.ui.feed.CATCH_UP_MIN
 import com.abhinavxt.newsforge.ui.feed.SearchField
 import com.abhinavxt.newsforge.ui.feed.SwipeableStoryCard
 import com.abhinavxt.newsforge.ui.feed.accent
@@ -60,14 +62,16 @@ import com.abhinavxt.newsforge.ui.feed.accent
  * and the list is flat — the reader has already said what they want, and headings between
  * three items would only get in the way.
  *
- * A tap opens the story in the reader. The market feed's sheet exists to triage tickers,
- * tiers and price moves, none of which a world story has, so here it would be a stop on
- * the way to the article with nothing on it.
+ * A tap opens [WorldStorySheet] — the headline in full, what the outlets agree on, and
+ * Open, Save and Share — rather than going straight to the article: with several outlets
+ * on a story, the sheet often answers it without the page load.
  */
 @Composable
 fun WorldScreen(
     state: WorldUiState,
     onOpenStory: (ScoredArticle) -> Unit,
+    onMarkRead: (ScoredArticle) -> Unit,
+    onShareStory: (ScoredArticle) -> Unit,
     onToggleRead: (ScoredArticle) -> Unit,
     onToggleSave: (ScoredArticle) -> Unit,
     onSelectTopic: (Category?) -> Unit,
@@ -78,11 +82,29 @@ fun WorldScreen(
     onClearFilters: () -> Unit,
     onRefresh: () -> Unit,
     customise: WorldCustomiseActions,
+    /** Starts catch-up over these stories, in this order. */
+    onCatchUp: (List<String>) -> Unit,
+    /** Reads one story aloud, or null when listening is unavailable. */
+    onListenStory: ((ScoredArticle) -> Unit)? = null,
+    /** Reads the front page aloud, or null when listening is unavailable. */
+    onListenAll: ((List<ScoredArticle>) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val ready = state as? WorldUiState.Ready
     var searching by rememberSaveable { mutableStateOf(false) }
     var customising by rememberSaveable { mutableStateOf(false) }
+    // An id, not a row, so the sheet follows the list: saving from it re-renders the star.
+    var detailId by rememberSaveable { mutableStateOf<String?>(null) }
+    val detail = detailId?.let { id ->
+        ready?.stories?.firstOrNull { it.article.clusterId == id }
+            ?: ready?.following?.firstOrNull { it.first.article.clusterId == id }?.first
+    }
+    // What catch-up and listening walk through: unread, in rank order, Following first.
+    val queue = ready?.let { state ->
+        (state.following.map { it.first } + state.stories)
+            .distinctBy { it.article.clusterId }
+    }.orEmpty()
+    val unread = queue.filterNot { it.article.read }
     val listState = rememberLazyListState()
     val haptics = LocalHapticFeedback.current
 
@@ -94,6 +116,20 @@ fun WorldScreen(
                 title = "World",
                 subtitle = ready?.let { "${it.stories.size} stories" },
                 actions = {
+                    if (unread.size >= CATCH_UP_MIN) {
+                        IconCircleButton(
+                            icon = R.drawable.ic_done_all,
+                            contentDescription = "Catch up on ${unread.size} unread",
+                            onClick = { onCatchUp(unread.take(CATCH_UP_MAX).map { it.article.clusterId }) },
+                        )
+                    }
+                    if (onListenAll != null && unread.isNotEmpty()) {
+                        IconCircleButton(
+                            icon = R.drawable.ic_listen,
+                            contentDescription = "Listen to the top stories",
+                            onClick = { onListenAll(unread.take(LISTEN_COUNT)) },
+                        )
+                    }
                     IconCircleButton(
                         icon = R.drawable.ic_settings,
                         contentDescription = "Customise World",
@@ -170,7 +206,10 @@ fun WorldScreen(
                                 article = scored.article,
                                 nowMillis = ready.nowMillis,
                                 watchlist = emptySet(),
-                                onOpen = { onOpenStory(scored) },
+                                onOpen = {
+                                    detailId = scored.article.clusterId
+                                    onMarkRead(scored)
+                                },
                                 onToggleSave = { onToggleSave(scored) },
                                 onToggleRead = { onToggleRead(scored) },
                                 onSelectSymbol = {},
@@ -214,6 +253,18 @@ fun WorldScreen(
                 }
             }
         }
+    }
+
+    detail?.let { selected ->
+        WorldStorySheet(
+            article = selected.article,
+            nowMillis = ready?.nowMillis ?: System.currentTimeMillis(),
+            onOpen = { onOpenStory(selected); detailId = null },
+            onToggleSave = { onToggleSave(selected) },
+            onShare = { onShareStory(selected) },
+            onDismiss = { detailId = null },
+            onListen = onListenStory?.let { listen -> { listen(selected); detailId = null } },
+        )
     }
 
     CustomiseHost(
@@ -405,6 +456,9 @@ private fun WorldEmptyState(
 
 /** Enough to cover the day's biggest stories without becoming a second feed. */
 private const val LEAD_COUNT = 3
+
+/** Stories read aloud from the header: a few minutes of listening, not the whole tab. */
+private const val LISTEN_COUNT = 10
 
 /** A topic's best few on the front page; the rest are a "See all" away. */
 private const val PER_TOPIC = 3

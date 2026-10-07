@@ -668,13 +668,13 @@ private fun BriefHeader(brief: Brief, nowMillis: Long, unread: Int, onCatchUp: (
 }
 
 /** Fewer than this and catch-up is a screen to step through three cards. */
-private const val CATCH_UP_MIN = 3
+internal const val CATCH_UP_MIN = 3
 
 /**
  * The highest-ranked this many, not every unread story. A Monday can leave four hundred,
  * and a pile that size is not something anyone works through card by card.
  */
-private const val CATCH_UP_MAX = 30
+internal const val CATCH_UP_MAX = 30
 
 /**
  * The shape of the night, before any of its contents.

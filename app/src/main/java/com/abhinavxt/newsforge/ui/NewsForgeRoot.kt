@@ -93,6 +93,7 @@ import com.abhinavxt.newsforge.ui.feed.FeedUiState
 import com.abhinavxt.newsforge.ui.feed.FeedViewModel
 import com.abhinavxt.newsforge.ui.world.WorldCustomiseActions
 import com.abhinavxt.newsforge.ui.world.WorldScreen
+import com.abhinavxt.newsforge.ui.world.WorldUiState
 import com.abhinavxt.newsforge.data.WorldPreferences
 import com.abhinavxt.newsforge.ui.world.WorldViewModel
 import com.abhinavxt.newsforge.ui.feed.PriceBook
@@ -176,6 +177,13 @@ fun NewsForgeRoot(
             )
         )
     val state by feedViewModel.uiState.collectAsStateWithLifecycle()
+    // Held here rather than inside the World tab, because catch-up and listening reach
+    // world stories from outside it. Activity-scoped either way, so this is the same
+    // instance the tab would have made.
+    val worldViewModel: WorldViewModel = viewModel(
+        factory = WorldViewModel.factory(repository, savedArticles, worldPreferences),
+    )
+    val worldState by worldViewModel.uiState.collectAsStateWithLifecycle()
     val symbolMatches by feedViewModel.symbolMatches.collectAsStateWithLifecycle()
 
     // Foreground polling, scoped to STARTED so it stops when the app is backgrounded.
@@ -368,7 +376,12 @@ fun NewsForgeRoot(
                         val ready = state as? FeedUiState.Ready
                         // Looked up live, so a save made on a card shows on it, but in the
                         // order captured at the start.
-                        val byId = ready?.stories.orEmpty().associateBy { it.article.clusterId }
+                        val worldReady = worldState as? WorldUiState.Ready
+                        // Both desks: catch-up starts from either tab, and a cluster id is
+                        // unique across the store, so one lookup serves both.
+                        val byId = (ready?.stories.orEmpty() + worldReady?.stories.orEmpty() +
+                            worldReady?.following.orEmpty().map { it.first })
+                            .associateBy { it.article.clusterId }
                         val queue = remember(catchUpIds, byId.isEmpty()) {
                             catchUpIds.mapNotNull { byId[it] }
                         }.map { byId[it.article.clusterId] ?: it }
@@ -461,10 +474,6 @@ fun NewsForgeRoot(
                         )
 
                         Tab.WORLD -> {
-                            val worldViewModel: WorldViewModel = viewModel(
-                                factory = WorldViewModel.factory(repository, savedArticles, worldPreferences),
-                            )
-                            val worldState by worldViewModel.uiState.collectAsStateWithLifecycle()
                             LaunchedEffect(lifecycleOwner) {
                                 lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                                     worldViewModel.autoRefreshWhileVisible()
@@ -475,6 +484,20 @@ fun NewsForgeRoot(
                                 onOpenStory = { scored ->
                                     worldViewModel.onStoryOpened(scored.article.clusterId)
                                     openLink(scored.article.link)
+                                },
+                                onMarkRead = { scored ->
+                                    worldViewModel.onStoryOpened(scored.article.clusterId)
+                                },
+                                onShareStory = { scored ->
+                                    Share.text(
+                                        context,
+                                        StoryPresentation.shareText(scored.article),
+                                        subject = scored.article.title,
+                                    )
+                                },
+                                onCatchUp = { ids ->
+                                    catchUpIds = ids
+                                    nav = Nav.push(nav, Detail.CatchUp)
                                 },
                                 onToggleRead = { scored ->
                                     worldViewModel.setRead(
