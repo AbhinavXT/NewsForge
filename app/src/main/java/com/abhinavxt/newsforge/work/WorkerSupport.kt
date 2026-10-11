@@ -10,6 +10,8 @@ import com.abhinavxt.newsforge.core.mute.MuteRule
 import com.abhinavxt.newsforge.core.mute.MuteRules
 import com.abhinavxt.newsforge.core.notify.AlertSettings
 import com.abhinavxt.newsforge.core.notify.DeskAlerts
+import com.abhinavxt.newsforge.core.notify.BoardAlerts
+import com.abhinavxt.newsforge.core.desk.BoardSnapshot
 import com.abhinavxt.newsforge.core.notify.NotificationPolicy
 import com.abhinavxt.newsforge.core.quote.PriceAlerts
 import com.abhinavxt.newsforge.data.DeskSyncResult
@@ -76,7 +78,58 @@ internal suspend fun applyDeskSync(container: AppContainer, result: DeskSyncResu
         tolerate(TAG_DESK, "screens") { container.repository.applyScreens(result.screens) }
     }
     tolerate(TAG_DESK, "desk signals") { announce(container, result.stored) }
+    result.board?.let { board ->
+        tolerate(TAG_DESK, "board alerts") { announceBoard(container, board) }
+    }
 }
+
+/**
+ * Rings for traps and reversals the desk's board flags on names you follow.
+ *
+ * Followed means the watchlist, which the desk's position snapshots keep in step with
+ * what is held — so a holding is covered without a second list.
+ */
+private suspend fun announceBoard(container: AppContainer, board: BoardSnapshot) {
+    val settings = container.alertPreferences.settings()
+    val now = System.currentTimeMillis()
+    val repository = container.repository
+    val chosen = BoardAlerts.select(
+        board = board,
+        followed = repository.watchlistSymbols().keys,
+        alreadyNotified = repository.alreadyNotified(now - STORY_DEDUPE_WINDOW_MS),
+        nowMillis = now,
+        quiet = NotificationPolicy.isQuiet(now, settings),
+        enabled = settings.enabled,
+    )
+    if (chosen.isEmpty()) return
+    val symbols = chosen.map { it.symbol }.distinct()
+    val headlines = repository.stories(symbols).first()
+        .sortedByDescending { it.article.publishedAt }
+        .flatMap { scored -> scored.article.symbols.filter { it in symbols }.map { it to scored.article.title } }
+        .distinctBy { it.first }
+        .toMap()
+    val posted = container.notifier.postBoard(chosen, headlines)
+    if (posted.isNotEmpty()) repository.markNotified(posted.map { it.key })
+}
+
+/**
+ * Asks the desk for a fresh board, at most every [BOARD_REQUEST_MS], while the session
+ * is open and something is followed.
+ *
+ * The board only travels when asked for. Without this the trap alerts would fire only
+ * while someone had the Board screen open — exactly when they are least needed.
+ */
+internal suspend fun requestBoard(container: AppContainer) {
+    val desk = container.deskPreferences
+    if (!desk.isConfigured) return
+    val now = System.currentTimeMillis()
+    if (now - desk.lastBoardRequestAt < BOARD_REQUEST_MS) return
+    if (container.repository.watchlistSymbols().isEmpty()) return
+    desk.lastBoardRequestAt = now
+    tolerate(TAG_DESK, "board request") { container.deskRepository.send(com.abhinavxt.newsforge.core.desk.Boards.COMMAND) }
+}
+
+private const val BOARD_REQUEST_MS: Long = 5L * 60 * 1000
 
 /**
  * Passes on the messages the desk marked urgent.

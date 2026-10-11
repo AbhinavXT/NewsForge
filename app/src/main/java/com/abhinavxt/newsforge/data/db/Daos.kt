@@ -500,6 +500,13 @@ interface DeskDao {
     @Query("SELECT COUNT(*) FROM desk_message WHERE read = 0")
     fun observeUnreadCount(): Flow<Int>
 
+    /**
+     * The newest message whose body matches [pattern] — a `LIKE` on the payload's kind,
+     * for structured messages too rare to find by scanning the newest few dozen rows.
+     */
+    @Query("SELECT * FROM desk_message WHERE body LIKE :pattern ORDER BY receivedAt DESC LIMIT 1")
+    fun observeLatestMatching(pattern: String): Flow<DeskMessageEntity?>
+
     /** Ignore, not replace: a redelivered message must not clear its read flag. */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertAll(messages: List<DeskMessageEntity>): List<Long>

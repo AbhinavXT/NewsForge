@@ -9,6 +9,14 @@ import com.abhinavxt.newsforge.ui.theme.EyebrowStyle
 import com.abhinavxt.newsforge.ui.theme.Mono
 import com.abhinavxt.newsforge.ui.theme.NumStyle
 import com.abhinavxt.newsforge.ui.components.Eyebrow
+import com.abhinavxt.newsforge.core.ta.OrderBlocks
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.remember
+import com.abhinavxt.newsforge.ui.components.ChipStrip
+import com.abhinavxt.newsforge.ui.components.NfChip
 import com.abhinavxt.newsforge.ui.components.Delta
 import androidx.compose.ui.unit.sp
 import com.abhinavxt.newsforge.ui.components.IconBadge
@@ -361,13 +369,35 @@ private fun ChartSection(
         RangeChips(chart.range, onSetRange)
         compareRow()
 
+        // Analysed from the very bars drawn, so the zone indices line up with the candles.
+        // Remembered on the list itself: the analysis is a few passes over a few hundred
+        // bars, cheap, but not something to redo on every recomposition.
+        var showZones by rememberSaveable { mutableStateOf(true) }
+        val zones = remember(chart.candles, chart.price?.last) {
+            OrderBlocks.analyze(chart.candles, chart.price?.last)
+        }
+        if (zones != null) {
+            ChipStrip {
+                NfChip(
+                    label = "Order blocks",
+                    selected = showZones,
+                    onClick = { showZones = !showZones },
+                )
+            }
+        }
+
         PriceChart(
             candles = chart.candles,
             storyTimes = chart.storyTimes,
             modifier = Modifier.padding(start = 16.dp, end = 4.dp, top = 12.dp),
             compare = chart.compare?.line.orEmpty(),
             compareColor = CompareColor,
+            zones = zones?.takeIf { showZones },
         )
+
+        if (zones != null && showZones) {
+            ZoneCard(zones, Modifier.padding(start = 12.dp, end = 12.dp, top = 12.dp))
+        }
 
         // Drawn before the empty-chart notice, because it does not need candles: with no
         // bars at all the exchange's own figures still fill it in, and a screen that can

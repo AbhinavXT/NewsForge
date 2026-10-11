@@ -111,6 +111,8 @@ class MarketWatchWorker(
             // against the previous poll's positions — wrong in exactly the window that
             // matters, the minutes after you open or close something.
             syncDesk(container)
+            // Asked now, answered on a later tick's poll — which is when its traps ring.
+            requestBoard(container)
             val report = tolerate(TAG, "refresh") {
                 // Markets only. The watch ticks every minute through the session, and
                 // the world feeds have their own, much slower schedule in the sync.

@@ -24,6 +24,11 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.abhinavxt.newsforge.core.quote.Candle
+import com.abhinavxt.newsforge.core.ta.ZoneAnalysis
+import com.abhinavxt.newsforge.ui.theme.CatDeal
+import com.abhinavxt.newsforge.ui.theme.CatPolicy
+import com.abhinavxt.newsforge.ui.theme.NumStyle
+import androidx.compose.ui.unit.sp
 import com.abhinavxt.newsforge.ui.theme.Accent
 import com.abhinavxt.newsforge.ui.theme.Chalk500
 import com.abhinavxt.newsforge.ui.theme.Ink500
@@ -53,6 +58,11 @@ fun PriceChart(
     /** A second company rebased onto this one, one value per candle; empty for none. */
     compare: List<Double?> = emptyList(),
     compareColor: Color = Color.Unspecified,
+    /**
+     * Order blocks and liquidity, analysed from these same [candles] — the indices must
+     * line up. Null draws the plain chart.
+     */
+    zones: ZoneAnalysis? = null,
 ) {
     if (candles.size < 2) {
         Box(
@@ -70,6 +80,7 @@ fun PriceChart(
 
     val measurer = rememberTextMeasurer()
     val labelStyle = MaterialTheme.typography.labelSmall.copy(color = Chalk500)
+    val tagStyle = NumStyle.copy(fontSize = 9.sp, lineHeight = 10.sp)
     val rising = candles.last().close >= candles.first().close
 
     Canvas(modifier = modifier.fillMaxWidth().height(height)) {
@@ -100,6 +111,9 @@ fun PriceChart(
         fun xFor(index: Int): Float = slot * index + slot / 2f
 
         drawGrid(plotWidth, plotHeight)
+        // Under the candles: a zone is the ground the bars are read against, and drawn on
+        // top it would tint the very candles that test it.
+        zones?.let { drawZones(it, measurer, tagStyle, slot, plotWidth, plotHeight, top, bottom, ::xFor, ::yFor) }
 
         if (slot >= 3.dp.toPx()) {
             drawCandles(candles, slot, plotHeight, ::xFor, ::yFor)
@@ -111,6 +125,99 @@ fun PriceChart(
         drawLastPrice(candles.last().close, plotWidth, rising, ::yFor)
         drawStoryTicks(storyTimes, candles, plotHeight, size.height, ::xFor)
         drawPriceLabels(measurer, labelStyle, top, bottom, plotWidth, plotHeight, size.width)
+    }
+}
+
+/**
+ * OrderBlock's chart marks: each live order block as a band from its bar to the right
+ * edge, the nearest swing resistance and support as dotted rules, resting liquidity as
+ * dashed rules with their kind, and each sweep as a small arrow at the bar that ran it.
+ *
+ * Anything outside the visible price range is left off rather than pinned to the frame:
+ * a level drawn at the edge reads as a level at the edge.
+ */
+private fun DrawScope.drawZones(
+    zones: ZoneAnalysis,
+    measurer: TextMeasurer,
+    style: TextStyle,
+    slot: Float,
+    plotWidth: Float,
+    plotHeight: Float,
+    top: Double,
+    bottom: Double,
+    xFor: (Int) -> Float,
+    yFor: (Double) -> Float,
+) {
+    fun visible(price: Double) = price in bottom..top
+
+    fun tag(text: String, color: Color, x: Float, y: Float) {
+        val measured = measurer.measure(text, style.copy(color = color))
+        val left = x.coerceIn(0f, plotWidth - measured.size.width - 2f)
+        val topY = (y - measured.size.height - 1f).coerceIn(0f, plotHeight - measured.size.height)
+        drawText(measured, topLeft = Offset(left, topY))
+    }
+
+    for (ob in listOfNotNull(zones.bullishBlock, zones.bearishBlock)) {
+        if (ob.top < bottom || ob.bottom > top) continue
+        val color = if (ob.bullish) QuoteUp else QuoteDown
+        val yTop = yFor(ob.top.coerceAtMost(top))
+        val yBottom = yFor(ob.bottom.coerceAtLeast(bottom))
+        val x = (xFor(ob.index) - slot / 2f).coerceAtLeast(0f)
+        val active = ob == zones.active
+        drawRect(
+            color = color.copy(alpha = if (active) 0.16f else 0.08f),
+            topLeft = Offset(x, yTop),
+            size = Size(plotWidth - x, (yBottom - yTop).coerceAtLeast(1f)),
+        )
+        for (edge in listOf(yTop, yBottom)) {
+            drawLine(color.copy(alpha = if (active) 0.6f else 0.3f), Offset(x, edge), Offset(plotWidth, edge), 1f)
+        }
+        tag("OB", color, x + 3f, yTop + 12f)
+    }
+
+    val dotted = PathEffect.dashPathEffect(floatArrayOf(2f, 5f))
+    zones.resistance?.takeIf(::visible)?.let { r ->
+        val y = yFor(r)
+        drawLine(CatDeal.copy(alpha = 0.7f), Offset(0f, y), Offset(plotWidth, y), 1f, pathEffect = dotted)
+        tag("R " + formatPrice(r), CatDeal, 4f, y)
+    }
+    zones.support?.takeIf(::visible)?.let { s ->
+        val y = yFor(s)
+        drawLine(CatPolicy.copy(alpha = 0.7f), Offset(0f, y), Offset(plotWidth, y), 1f, pathEffect = dotted)
+        tag("S " + formatPrice(s), CatPolicy, 4f, y + 12f)
+    }
+
+    val dashed = PathEffect.dashPathEffect(floatArrayOf(7f, 5f))
+    for (level in zones.resting) {
+        if (!visible(level.price)) continue
+        val y = yFor(level.price)
+        val x = xFor(level.formedIndex.coerceIn(0, Int.MAX_VALUE)).coerceIn(0f, plotWidth)
+        drawLine(Chalk500.copy(alpha = 0.55f), Offset(x, y), Offset(plotWidth, y), 1f, pathEffect = dashed)
+        tag(level.kind.name, Chalk500, x + 2f, y)
+    }
+
+    // A sweep, at the bar that ran the level: ▲ under a low that trapped sellers, ▼ over a
+    // high that trapped buyers.
+    val size = 5.dp.toPx()
+    // The newest few: an old sweep is history the chart already shows in the bars.
+    for (trap in zones.traps.take(3)) {
+        if (!visible(trap.extreme)) continue
+        val x = xFor(trap.index)
+        val color = if (trap.bullish) QuoteUp else QuoteDown
+        val y = yFor(trap.extreme) + if (trap.bullish) size * 1.6f else -size * 1.6f
+        val path = Path().apply {
+            if (trap.bullish) {
+                moveTo(x, y - size)
+                lineTo(x - size, y + size * 0.6f)
+                lineTo(x + size, y + size * 0.6f)
+            } else {
+                moveTo(x, y + size)
+                lineTo(x - size, y - size * 0.6f)
+                lineTo(x + size, y - size * 0.6f)
+            }
+            close()
+        }
+        drawPath(path, color)
     }
 }
 

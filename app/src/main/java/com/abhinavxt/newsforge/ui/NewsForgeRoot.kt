@@ -109,6 +109,8 @@ import com.abhinavxt.newsforge.ui.nav.Nav
 import com.abhinavxt.newsforge.ui.nav.NavState
 import com.abhinavxt.newsforge.ui.nav.Tab
 import com.abhinavxt.newsforge.ui.rollup.SectorsScreen
+import com.abhinavxt.newsforge.ui.board.BoardScreen
+import com.abhinavxt.newsforge.ui.board.BoardViewModel
 import com.abhinavxt.newsforge.ui.settings.QuietHours
 import com.abhinavxt.newsforge.ui.settings.SettingsScreen
 import java.time.LocalTime
@@ -445,6 +447,20 @@ fun NewsForgeRoot(
                         )
                     }
 
+                    is Detail.Board -> {
+                        val boardViewModel: BoardViewModel = viewModel(
+                            factory = BoardViewModel.factory(deskRepository, repository, deskPreferences),
+                        )
+                        val board by boardViewModel.uiState.collectAsStateWithLifecycle()
+                        BoardScreen(
+                            state = board,
+                            onRefresh = boardViewModel::refresh,
+                            onOpenSymbol = pushSymbol,
+                            onOpenSettings = { nav = Nav.selectTab(nav, Tab.SETTINGS) },
+                            onBack = { Nav.pop(nav)?.let { nav = it } },
+                        )
+                    }
+
                     null -> when (screen.tab) {
                         Tab.NEWS -> FeedScreen(
                             state = state,
@@ -471,6 +487,7 @@ fun NewsForgeRoot(
                             },
                             onSelectGroup = feedViewModel::selectGroup,
                             onOpenSectors = { nav = Nav.push(nav, Detail.Sectors) },
+                            onOpenBoard = { nav = Nav.push(nav, Detail.Board) },
                             onToggleWatchlist = feedViewModel::toggleWatchlistOnly,
                             onSelectSymbol = feedViewModel::setSymbol,
                             onToggleSymbol = feedViewModel::toggleWatchlist,
@@ -812,6 +829,7 @@ private val NavSaver = androidx.compose.runtime.saveable.listSaver<NavState, Str
                     when (detail) {
                         is Detail.Symbol -> add("${tab.name}:SYMBOL:${detail.symbol}")
                         is Detail.Sectors -> add("${tab.name}:SECTORS:")
+                        is Detail.Board -> add("${tab.name}:BOARD:")
                         // The URL's own colons are safe: the split below stops at three parts.
                         is Detail.Reader -> add("${tab.name}:READER:${detail.url}")
                         is Detail.CatchUp -> add("${tab.name}:CATCHUP:")
@@ -833,6 +851,7 @@ private val NavSaver = androidx.compose.runtime.saveable.listSaver<NavState, Str
             val detail = when (parts[1]) {
                 "SYMBOL" -> Detail.Symbol(parts[2])
                 "SECTORS" -> Detail.Sectors
+                "BOARD" -> Detail.Board
                 "READER" -> Detail.Reader(parts[2])
                 "CATCHUP" -> Detail.CatchUp
                 else -> continue

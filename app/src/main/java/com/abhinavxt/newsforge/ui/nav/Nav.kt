@@ -20,6 +20,9 @@ sealed interface Detail {
     /** The sector rollup. Carries nothing: it summarises the whole stored window. */
     data object Sectors : Detail
 
+    /** The desk's F&O order-block board. Carries nothing: there is one board. */
+    data object Board : Detail
+
     /** An article opened in the in-app reader. */
     data class Reader(val url: String) : Detail
 

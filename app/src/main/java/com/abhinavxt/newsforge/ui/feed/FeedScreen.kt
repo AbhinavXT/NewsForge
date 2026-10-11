@@ -112,6 +112,7 @@ fun FeedScreen(
     onToggleScreen: (String) -> Unit,
     onSelectGroup: (CategoryGroup?) -> Unit,
     onOpenSectors: () -> Unit,
+    onOpenBoard: () -> Unit,
     onToggleWatchlist: () -> Unit,
     onSetMode: (FeedMode) -> Unit,
     onRefresh: () -> Unit,
@@ -169,6 +170,13 @@ fun FeedScreen(
                     }
                     // Ahead of search, because it answers a question the reader has
                     // before they know what to search for.
+                    // The board first: it is the market's answer to "which names", and the
+                    // sectors and search narrow from there.
+                    IconCircleButton(
+                        icon = R.drawable.ic_board,
+                        contentDescription = "Order-block board",
+                        onClick = onOpenBoard,
+                    )
                     IconCircleButton(
                         icon = R.drawable.ic_chart,
                         contentDescription = "Sectors",

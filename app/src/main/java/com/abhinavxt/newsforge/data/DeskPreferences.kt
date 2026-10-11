@@ -17,6 +17,11 @@ class DeskPreferences(context: Context) {
         get() = prefs.getString(KEY_SERVER, DEFAULT_SERVER).orEmpty().ifEmpty { DEFAULT_SERVER }
         set(value) = prefs.edit().putString(KEY_SERVER, value.trim()).apply()
 
+    /** When the app last asked the desk for its board; see `requestBoard`. */
+    var lastBoardRequestAt: Long
+        get() = prefs.getLong(KEY_LAST_BOARD_REQUEST, 0L)
+        set(value) = prefs.edit().putLong(KEY_LAST_BOARD_REQUEST, value).apply()
+
     var topic: String
         get() = prefs.getString(KEY_TOPIC, "").orEmpty()
         set(value) = prefs.edit().putString(KEY_TOPIC, value.trim()).apply()
@@ -31,6 +36,7 @@ class DeskPreferences(context: Context) {
 
     companion object {
         const val DEFAULT_SERVER = "https://ntfy.sh"
+        private const val KEY_LAST_BOARD_REQUEST = "last_board_request_at"
         private const val KEY_SERVER = "server"
         private const val KEY_TOPIC = "topic"
         private const val KEY_TOKEN = "token"

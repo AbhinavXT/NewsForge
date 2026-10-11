@@ -158,7 +158,7 @@ object DeskPayloads {
      * Positions and screens never hit this because neither carries a top-level `symbol`;
      * they fall out at the line below. Candles do, which is what made this necessary.
      */
-    private val NON_QUOTE_KINDS = setOf(Candles.KIND)
+    private val NON_QUOTE_KINDS = setOf(Candles.KIND, Boards.KIND)
 
     /**
      * Kinds that exist to be stored, not read.
@@ -169,7 +169,7 @@ object DeskPayloads {
      * glance at a company now produces five of them. Left in the list they bury the
      * signals a person actually subscribed for.
      */
-    val MACHINE_KINDS = setOf(Candles.KIND)
+    val MACHINE_KINDS = setOf(Candles.KIND, Boards.KIND)
 
     /** True when this payload is data for the app rather than a message for the reader. */
     fun isMachine(record: Map<String, String?>): Boolean =

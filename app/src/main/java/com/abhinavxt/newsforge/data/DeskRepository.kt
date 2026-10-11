@@ -1,6 +1,8 @@
 package com.abhinavxt.newsforge.data
 
 import android.util.Log
+import com.abhinavxt.newsforge.core.desk.BoardSnapshot
+import com.abhinavxt.newsforge.core.desk.Boards
 import com.abhinavxt.newsforge.core.desk.DeskMessage
 import com.abhinavxt.newsforge.core.desk.DeskPayload
 import com.abhinavxt.newsforge.core.desk.NtfyMessages
@@ -36,6 +38,8 @@ data class DeskSyncResult(
      * store beyond an HTTP client. It is handed to the `onSynced` sink, which decides.
      */
     val positions: PositionSnapshot? = null,
+    /** The newest order-block board among the messages this poll stored. */
+    val board: BoardSnapshot? = null,
 ) {
     companion object {
         val NotConfigured = DeskSyncResult(0, 0, null)
@@ -101,7 +105,13 @@ class DeskRepository(
      */
     fun recent(limit: Int = 200): Flow<List<DeskMessage>> =
         deskDao.observeRecent(limit * 2)
-            .map { rows -> rows.map { it.toDomain() }.filterNot { it.machine }.take(limit) }
+            .map { rows ->
+                rows.map { it.toDomain() }
+                    // The app's own board requests, sent every few minutes in the session,
+                    // would otherwise be most of the log.
+                    .filterNot { it.machine || Boards.isRequest(it.body) }
+                    .take(limit)
+            }
             .flowOn(computeDispatcher)
 
     /**
@@ -159,6 +169,19 @@ class DeskRepository(
         }.flowOn(computeDispatcher)
 
     fun unreadCount(): Flow<Int> = deskDao.observeUnreadCount()
+
+    /**
+     * The newest order-block board the desk has sent, however long ago.
+     *
+     * By query rather than by scanning recent rows the way quotes are found: quotes arrive
+     * every minute and a board only when asked for, so the newest one can be hundreds of
+     * rows down. Age is the screen's to judge — a closing board is still worth showing in
+     * the evening, labelled as such.
+     */
+    fun latestBoard(): Flow<BoardSnapshot?> =
+        deskDao.observeLatestMatching("%\"kind\":\"${Boards.KIND}\"%")
+            .map { row -> row?.let { NtfyJson.parseBoard(it.body) } }
+            .flowOn(computeDispatcher)
 
     suspend fun markAllRead() = withContext(ioDispatcher) { deskDao.markAllRead() }
 
@@ -277,7 +300,13 @@ class DeskRepository(
                 stored.mapNotNull { NtfyJson.parseCandles(it.body) }
                     .takeIf { it.isNotEmpty() }
                     ?.let { candles?.store(it) }
-                DeskSyncResult(messages.size, inserted, null, stored, screens, positions)
+                // From what this poll stored, not everything it fetched: the poll overlaps
+                // its watermark, and a board seen twice must not be acted on twice.
+                val board = stored
+                    .sortedBy { it.receivedAtMillis }
+                    .mapNotNull { NtfyJson.parseBoard(it.body) }
+                    .lastOrNull()
+                DeskSyncResult(messages.size, inserted, null, stored, screens, positions, board)
                     .also { synced ->
                         // Isolated: applying a snapshot can fail without the poll that
                         // fetched it reporting the bridge as down.

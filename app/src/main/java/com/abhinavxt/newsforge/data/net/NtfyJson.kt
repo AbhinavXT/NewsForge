@@ -1,5 +1,7 @@
 package com.abhinavxt.newsforge.data.net
 
+import com.abhinavxt.newsforge.core.desk.BoardSnapshot
+import com.abhinavxt.newsforge.core.desk.Boards
 import com.abhinavxt.newsforge.core.desk.Candles
 import com.abhinavxt.newsforge.core.desk.DeskMessage
 import com.abhinavxt.newsforge.core.desk.DeskPayload
@@ -102,6 +104,10 @@ object NtfyJson {
 
     fun parseCandles(body: String): CandleBatch? =
         flatten(body)?.let { Candles.fromFlat(it) }
+
+    /** Reads the desk's order-block board out of a message body; see [Boards]. */
+    fun parseBoard(body: String): BoardSnapshot? =
+        flatten(body)?.let { Boards.fromFlat(it) }
 
     private fun flatten(obj: JSONObject, prefix: String, into: MutableMap<String, String?>) {
         for (key in obj.keys()) {

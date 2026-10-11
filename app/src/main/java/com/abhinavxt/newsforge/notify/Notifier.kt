@@ -382,6 +382,66 @@ class Notifier(private val context: Context) {
     }
 
     /**
+     * Announces an order-block setup on a name you follow: a liquidity trap, or a reversal
+     * building at the block.
+     *
+     * On the desk's channel — it is the desk's scan — and with the newest headline on the
+     * name as the body, because that is what this app adds to the board: the flag says
+     * something is happening at a level, the headline is often why.
+     *
+     * @param headlines the latest story title per symbol, where there is one.
+     */
+    fun postBoard(
+        alerts: List<com.abhinavxt.newsforge.core.notify.BoardAlerts.Alert>,
+        headlines: Map<String, String>,
+    ): List<com.abhinavxt.newsforge.core.notify.BoardAlerts.Alert> {
+        if (alerts.isEmpty()) return emptyList()
+        if (!canPost()) {
+            Log.i(TAG, "Notification permission not granted; dropping ${alerts.size} board alerts")
+            return emptyList()
+        }
+        ensureChannels()
+        val manager = NotificationManagerCompat.from(context)
+        val posted = ArrayList<com.abhinavxt.newsforge.core.notify.BoardAlerts.Alert>(alerts.size)
+
+        for (alert in alerts) {
+            val row = alert.row
+            val zone = if (row.orderBlockBottom != null && row.orderBlockTop != null) {
+                String.format(java.util.Locale.US, "Zone %,.2f–%,.2f", row.orderBlockBottom, row.orderBlockTop)
+            } else {
+                null
+            }
+            val facts = listOfNotNull(
+                "${row.side.label} #${row.rank} · score ${row.score}",
+                row.changePercent?.let { String.format(java.util.Locale.US, "%+.2f%%", it) },
+                zone,
+            ).joinToString(" · ")
+            val headline = headlines[row.symbol]
+            val notification = NotificationCompat.Builder(context, CHANNEL_DESK)
+                .setSmallIcon(R.drawable.ic_stat_newsforge)
+                .setContentTitle(alert.title)
+                .setContentText(headline ?: facts)
+                .setStyle(
+                    NotificationCompat.BigTextStyle()
+                        .bigText(listOfNotNull(facts, headline).joinToString("\n"))
+                )
+                .setContentIntent(symbolIntent(row.symbol, alert.key))
+                .setAutoCancel(true)
+                .setCategory(NotificationCompat.CATEGORY_RECOMMENDATION)
+                .setGroup(GROUP_DESK)
+                .build()
+            try {
+                manager.notify(alert.key.hashCode(), notification)
+                posted += alert
+            } catch (e: SecurityException) {
+                Log.w(TAG, "Board alert refused", e)
+                return posted
+            }
+        }
+        return posted
+    }
+
+    /**
      * Builds one action button.
      *
      * Everything but [AlertAction.CHART] goes to a receiver, because the value of these
