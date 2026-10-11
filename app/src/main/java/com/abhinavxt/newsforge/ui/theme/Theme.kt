@@ -55,18 +55,18 @@ private fun colorsFor(p: Palette): ColorScheme {
 }
 
 /**
- * Rounded, and more so as things get bigger.
+ * Rounded, and more so as things get bigger: OrderBlock's 6 / 9 / 12 / 16 / 22 ladder.
  *
- * A chip at 10dp, a card at 16, a sheet at 28. One radius everywhere makes small things
- * look like pills and big things look like boxes; scaling it keeps the curvature reading
- * as the same family at every size.
+ * A tag at 6, a control at 9, a row at 12, a panel at 16, a sheet at 22. One radius
+ * everywhere makes small things look like pills and big things look like boxes; scaling it
+ * keeps the curvature reading as the same family at every size.
  */
 private val NewsForgeShapes = Shapes(
     extraSmall = RoundedCornerShape(6.dp),
-    small = RoundedCornerShape(10.dp),
+    small = RoundedCornerShape(9.dp),
     medium = RoundedCornerShape(16.dp),
-    large = RoundedCornerShape(20.dp),
-    extraLarge = RoundedCornerShape(28.dp),
+    large = RoundedCornerShape(16.dp),
+    extraLarge = RoundedCornerShape(22.dp),
 )
 
 /**

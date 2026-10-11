@@ -38,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.abhinavxt.newsforge.core.feed.FeedKind
 import com.abhinavxt.newsforge.core.feed.FeedValidation
 import com.abhinavxt.newsforge.core.model.Category
@@ -188,7 +189,7 @@ private fun FeedRow(
         Row(verticalAlignment = Alignment.CenterVertically) {
             // The status as a light first, so a failing feed is findable in a list of thirty
             // without reading thirty status lines.
-            Dot(if (item.feed.enabled) statusColor else Chalk500, 8.dp)
+            com.abhinavxt.newsforge.ui.components.HaloDot(if (item.feed.enabled) statusColor else Chalk500, size = 7.dp)
             Column(Modifier.weight(1f).padding(start = 12.dp, end = 8.dp)) {
                 Text(
                     text = item.feed.name,
@@ -215,9 +216,9 @@ private fun FeedRow(
                         }
                         item.state?.lastItemCount?.takeIf { it > 0 }?.let { append(" · $it items") }
                     },
-                    style = MaterialTheme.typography.labelSmall,
+                    style = com.abhinavxt.newsforge.ui.theme.NumStyle.copy(fontSize = 11.sp),
                     color = statusColor,
-                    modifier = Modifier.padding(top = 2.dp),
+                    modifier = Modifier.padding(top = 3.dp),
                 )
                 item.state?.lastError?.let { error ->
                     Text(

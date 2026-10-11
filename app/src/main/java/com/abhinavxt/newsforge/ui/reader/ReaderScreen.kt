@@ -6,6 +6,8 @@
 
 package com.abhinavxt.newsforge.ui.reader
 
+import com.abhinavxt.newsforge.ui.theme.EyebrowStyle
+import com.abhinavxt.newsforge.ui.theme.Mono
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -433,7 +435,7 @@ private fun MarketStrip(
                     Text(
                         text = symbol,
                         style = MaterialTheme.typography.labelMedium,
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = Mono,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
@@ -441,7 +443,7 @@ private fun MarketStrip(
                         Text(
                             text = StoryPresentation.changeLabel(change),
                             style = MaterialTheme.typography.labelMedium,
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = Mono,
                             color = if (change < 0) QuoteDown else QuoteUp,
                         )
                     }
@@ -697,8 +699,7 @@ private fun SettingRow(label: String, content: @Composable () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             text = label.uppercase(),
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
+            style = EyebrowStyle,
             color = Chalk500,
         )
         content()

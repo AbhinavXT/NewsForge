@@ -5,6 +5,7 @@
 
 package com.abhinavxt.newsforge.ui.world
 
+import com.abhinavxt.newsforge.ui.theme.EyebrowStyle
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -269,8 +270,7 @@ private fun SwitchRow(title: String, body: String, checked: Boolean, onChange: (
 private fun Label(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text.uppercase(),
-        style = MaterialTheme.typography.labelSmall,
-        fontWeight = FontWeight.Bold,
+        style = EyebrowStyle,
         color = Chalk500,
         modifier = modifier.padding(top = 22.dp, bottom = 4.dp),
     )

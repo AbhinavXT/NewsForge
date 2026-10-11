@@ -40,6 +40,7 @@ import com.abhinavxt.newsforge.ui.theme.Chalk500
 import com.abhinavxt.newsforge.ui.theme.Hairline
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -722,30 +723,25 @@ private fun screenTransition(from: Screen, to: Screen): ContentTransform {
 }
 
 /**
- * The tab bar, as a floating dock.
+ * The tab bar: a full-width strip on the page colour with a hairline along its top, the
+ * way TickerForge and OrderBlock set theirs on a phone.
  *
- * A rounded slab set in from the screen edges rather than a full-width strip: it reads as
- * one control rather than as the bottom of the page, and the selected tab gets a lit pill
- * behind its icon that slides in, so a change of tab is visible out of the corner of an
- * eye without having to read a label.
+ * The selected tab is lit in the accent and gets a short bar along the top edge that
+ * grows in, so a change of tab is visible out of the corner of an eye without reading.
  */
 @Composable
 private fun NavDock(selected: Tab, onSelect: (Tab) -> Unit) {
-    Box(
+    Column(
         Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.background)
-            .navigationBarsPadding()
-            .padding(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 10.dp),
     ) {
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Hairline))
         Row(
             Modifier
                 .fillMaxWidth()
-                .height(64.dp)
-                .clip(RoundedCornerShape(22.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .border(1.dp, Hairline, RoundedCornerShape(22.dp))
-                .padding(horizontal = 6.dp),
+                .navigationBarsPadding()
+                .height(60.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             for (tab in Tab.entries) {
@@ -754,53 +750,43 @@ private fun NavDock(selected: Tab, onSelect: (Tab) -> Unit) {
                     if (isSelected) MaterialTheme.colorScheme.primary else Chalk500,
                     label = "dock-tint",
                 )
-                val indicator by animateColorAsState(
-                    if (isSelected) {
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
-                    } else {
-                        Color.Transparent
-                    },
-                    label = "dock-indicator",
-                )
-                val indicatorWidth by animateDpAsState(
-                    if (isSelected) 52.dp else 32.dp,
+                val barWidth by animateDpAsState(
+                    if (isSelected) 24.dp else 0.dp,
                     animationSpec = spring(dampingRatio = 0.7f, stiffness = 600f),
-                    label = "dock-indicator-width",
+                    label = "dock-bar-width",
                 )
                 Column(
                     Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .clip(RoundedCornerShape(16.dp))
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
                         ) { onSelect(tab) },
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
                 ) {
                     Box(
                         Modifier
-                            .width(indicatorWidth)
-                            .height(30.dp)
-                            .clip(RoundedCornerShape(15.dp))
-                            .background(indicator),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            painter = painterResource(tabIcon(tab)),
-                            contentDescription = null,
-                            tint = tint,
-                            modifier = Modifier.size(21.dp),
-                        )
-                    }
+                            .width(barWidth)
+                            .height(2.dp)
+                            .clip(RoundedCornerShape(bottomStart = 2.dp, bottomEnd = 2.dp))
+                            .background(MaterialTheme.colorScheme.primary)
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Icon(
+                        painter = painterResource(tabIcon(tab)),
+                        contentDescription = null,
+                        tint = tint,
+                        modifier = Modifier.size(21.dp),
+                    )
                     Text(
                         text = tab.label,
                         style = MaterialTheme.typography.labelSmall,
-                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
                         color = tint,
-                        modifier = Modifier.padding(top = 3.dp),
+                        modifier = Modifier.padding(top = 4.dp),
                     )
+                    Spacer(Modifier.weight(1f))
                 }
             }
         }

@@ -2,6 +2,7 @@
 
 package com.abhinavxt.newsforge.ui.world
 
+import com.abhinavxt.newsforge.ui.theme.Mono
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -70,7 +71,7 @@ fun WorldStorySheet(
                 Pill(article.category.label, article.category.accent, dot = true)
                 Text(
                     text = RelativeTime.format(article.publishedAt, nowMillis),
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = Mono,
                     style = MaterialTheme.typography.labelSmall,
                     color = Chalk500,
                     maxLines = 1,

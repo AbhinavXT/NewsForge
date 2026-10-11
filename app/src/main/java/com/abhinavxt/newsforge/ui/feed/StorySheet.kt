@@ -6,6 +6,8 @@
 
 package com.abhinavxt.newsforge.ui.feed
 
+import com.abhinavxt.newsforge.ui.theme.EyebrowStyle
+import com.abhinavxt.newsforge.ui.theme.Mono
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.background
@@ -133,7 +135,7 @@ fun StorySheet(
                 Pill(article.category.label, article.category.accent, dot = true)
                 Text(
                     text = RelativeTime.format(article.publishedAt, nowMillis),
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = Mono,
                     style = MaterialTheme.typography.labelSmall,
                     color = Chalk500,
                     maxLines = 1,
@@ -343,7 +345,7 @@ private fun SymbolExposure(
             Text(
                 text = symbol,
                 style = MaterialTheme.typography.titleSmall,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = Mono,
                 fontWeight = FontWeight.SemiBold,
                 color = if (current != null) {
                     MaterialTheme.colorScheme.primary
@@ -400,8 +402,7 @@ private fun SymbolExposure(
 internal fun SheetLabel(text: String) {
     Text(
         text = text.uppercase(),
-        style = MaterialTheme.typography.labelSmall,
-        fontWeight = FontWeight.Bold,
+        style = EyebrowStyle,
         color = Chalk500,
         modifier = Modifier.padding(top = 20.dp, bottom = 8.dp),
     )
@@ -432,7 +433,7 @@ internal fun ReactionBanner(reaction: Reaction, publishedAt: Long, nowMillis: Lo
         Text(
             text = StoryPresentation.changeLabel(reaction.percent),
             style = MaterialTheme.typography.titleMedium,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = Mono,
             color = if (rising) QuoteUp else QuoteDown,
         )
         Text(
@@ -521,7 +522,7 @@ internal fun RankExplainer(article: ArticleSummary, nowMillis: Long) {
                 Text(
                     text = String.format(Locale.US, "%.2fx", factor.multiplier),
                     style = MaterialTheme.typography.labelSmall,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = Mono,
                     color = when {
                         factor.isNeutral -> Chalk500
                         factor.multiplier > 1.0 -> QuoteUp

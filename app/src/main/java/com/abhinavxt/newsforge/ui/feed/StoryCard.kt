@@ -46,14 +46,18 @@ import com.abhinavxt.newsforge.core.quote.VolumeLevel
 import com.abhinavxt.newsforge.core.quote.VolumeProfile
 import com.abhinavxt.newsforge.core.quote.ReactionBasis
 import com.abhinavxt.newsforge.data.model.ArticleSummary
-import com.abhinavxt.newsforge.ui.components.Pill
+import com.abhinavxt.newsforge.ui.components.Delta
+import com.abhinavxt.newsforge.ui.components.Eyebrow
+import com.abhinavxt.newsforge.ui.components.Monogram
+import com.abhinavxt.newsforge.ui.components.accentWash
+import com.abhinavxt.newsforge.ui.components.cornerBrackets
+import com.abhinavxt.newsforge.ui.theme.NumStyle
+import androidx.compose.foundation.border
+import androidx.compose.ui.unit.sp
 import com.abhinavxt.newsforge.ui.theme.AccentDim
-import com.abhinavxt.newsforge.ui.theme.BrandGradient
 import com.abhinavxt.newsforge.ui.theme.Hairline
 import com.abhinavxt.newsforge.ui.theme.CatRegulatory
 import com.abhinavxt.newsforge.ui.theme.Chalk500
-import com.abhinavxt.newsforge.ui.theme.QuoteDown
-import com.abhinavxt.newsforge.ui.theme.QuoteUp
 import com.abhinavxt.newsforge.ui.util.RelativeTime
 
 /**
@@ -92,19 +96,22 @@ fun StoryCard(
     onToggleSave: (() -> Unit)? = null,
 ) {
     val followed = article.symbols.any { it in watchlist }
+    val leadSymbol = article.symbols.firstOrNull()
+    // The lead's mark is the brand accent, not the category's: it says "first", and a
+    // category colour there would say "this kind".
+    val mark = MaterialTheme.colorScheme.primary
 
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, Hairline),
+        border = BorderStroke(1.dp, if (lead) mark.copy(alpha = 0.38f) else Hairline),
     ) {
-        Column(Modifier.clickable(onClick = onOpen)) {
-            if (lead) {
-                // The lead's mark: a lit top edge in the brand gradient. It says "first"
-                // without borrowing a category colour, which would say "this kind".
-                Box(Modifier.fillMaxWidth().height(2.dp).background(BrandGradient))
-            }
+        Column(
+            Modifier
+                .then(if (lead) Modifier.background(accentWash(mark)).cornerBrackets(mark, outset = (-5).dp) else Modifier)
+                .clickable(onClick = onOpen)
+        ) {
             Row(Modifier.height(IntrinsicSize.Min)) {
                 if (followed) {
                     // Sized to the card rather than to a fixed height: a rail that stops a
@@ -125,43 +132,57 @@ fun StoryCard(
                         .padding(
                             start = if (followed) 13.dp else 16.dp,
                             end = if (onToggleSave != null) 4.dp else 16.dp,
-                            top = if (lead) 14.dp else 13.dp,
-                            bottom = 13.dp,
+                            top = if (lead) 16.dp else 14.dp,
+                            bottom = if (lead) 16.dp else 14.dp,
                         ),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
+                    // Masthead: a monogram for the company the story is about — or the
+                    // outlet, when it is about none — then who and when, then whether the
+                    // market has moved since.
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        if (lead) {
+                        Monogram(
+                            text = leadSymbol ?: article.sourceName,
+                            color = if (leadSymbol != null) article.category.accent else Chalk500,
+                            size = if (lead) 34.dp else 28.dp,
+                        )
+                        Column(Modifier.weight(1f)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                if (lead) Eyebrow("Top story", color = mark)
+                                if (showCategory) Eyebrow(article.category.label, color = article.category.accent)
+                                if (!lead && !showCategory) {
+                                    Text(
+                                        text = leadSymbol ?: article.sourceName,
+                                        style = if (leadSymbol != null) NumStyle else MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
                             Text(
-                                text = "TOP STORY",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary,
+                                text = RelativeTime.byline(
+                                    article.sourceName,
+                                    article.otherSources.size,
+                                    article.publishedAt,
+                                    nowMillis,
+                                ),
+                                style = NumStyle.copy(fontSize = 11.sp),
+                                color = Chalk500,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(top = 1.dp),
                             )
                         }
-                        if (showCategory) {
-                            Pill(article.category.label, article.category.accent)
-                        }
-                        Text(
-                            text = RelativeTime.byline(
-                                article.sourceName,
-                                article.otherSources.size,
-                                article.publishedAt,
-                                nowMillis,
-                            ),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Chalk500,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false),
-                        )
                         // Next to the timestamp, because it is measured from it. The day's
-                        // move stays on the ticker below: they answer different questions
-                        // and putting them side by side would invite reading one as the
-                        // other.
+                        // move stays on the ticker below: they answer different questions.
                         prices.reactionFor(article)?.let { reaction ->
                             ReactionLabel(reaction)
                         }
@@ -177,9 +198,9 @@ fun StoryCard(
                         // Read stories fade rather than disappear: you often want to find
                         // something again after opening it.
                         fontWeight = when {
-                            lead -> FontWeight.SemiBold
-                            article.read -> FontWeight.Normal
-                            else -> FontWeight.Medium
+                            lead -> FontWeight.Bold
+                            article.read -> FontWeight.Medium
+                            else -> FontWeight.SemiBold
                         },
                         color = if (article.read) {
                             MaterialTheme.colorScheme.onSurfaceVariant
@@ -196,9 +217,7 @@ fun StoryCard(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             // Tap filters the feed to that company; long-press follows or
-                            // unfollows it. Tap gets the reversible, more common action —
-                            // long-press for the one that changes stored state is the safer
-                            // way round in a list you are scrolling fast.
+                            // unfollows it. Tap gets the reversible, more common action.
                             for (symbol in article.symbols.take(4)) {
                                 TickerChip(
                                     symbol = symbol,
@@ -208,10 +227,7 @@ fun StoryCard(
                                     onLongClick = { onToggleSymbol(symbol) },
                                 )
                             }
-                            // Beside the tickers, because it is a fact about them. A name
-                            // already trading at three times normal when the story lands
-                            // means either the news is out ahead of you or something else
-                            // is going on that the headline does not mention.
+                            // Beside the tickers, because it is a fact about them.
                             VolumeBadge(prices.volumeFor(article))
                         }
                     }
@@ -219,8 +235,7 @@ fun StoryCard(
 
                 if (onToggleSave != null) {
                     // Drawn rather than set as a glyph: "★" resolves to whatever font the
-                    // device falls back to, which differs enough between handsets to look
-                    // like a bug.
+                    // device falls back to.
                     Icon(
                         painter = painterResource(
                             if (article.saved) R.drawable.ic_star else R.drawable.ic_star_border
@@ -228,12 +243,10 @@ fun StoryCard(
                         contentDescription = if (article.saved) "Remove from saved" else "Save",
                         tint = if (article.saved) MaterialTheme.colorScheme.primary else Chalk500,
                         modifier = Modifier
-                            .padding(top = 6.dp, end = 6.dp)
+                            .padding(top = 8.dp, end = 6.dp)
                             .size(36.dp)
-                            .clip(RoundedCornerShape(18.dp))
+                            .clip(RoundedCornerShape(9.dp))
                             .clickable(onClick = onToggleSave)
-                            // Inside the touch target, not around it: the glyph draws at
-                            // 20dp while the tappable area stays 36.
                             .padding(8.dp),
                     )
                 }
@@ -257,27 +270,33 @@ private fun TickerChip(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
+    val shape = RoundedCornerShape(6.dp)
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(7.dp))
+            .height(24.dp)
+            .clip(shape)
             .background(
                 if (watched) {
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
                 } else {
                     MaterialTheme.colorScheme.surfaceVariant
                 }
             )
+            .border(
+                1.dp,
+                if (watched) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f) else Hairline,
+                shape,
+            )
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(horizontal = 7.dp, vertical = 3.dp),
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
+            .padding(horizontal = 7.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = symbol,
-            style = MaterialTheme.typography.labelSmall,
-            fontFamily = FontFamily.Monospace,
-            fontWeight = if (watched) FontWeight.SemiBold else FontWeight.Medium,
-            color = if (watched) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            style = NumStyle.copy(fontSize = 11.5.sp),
+            fontWeight = FontWeight.Bold,
+            color = if (watched) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -285,14 +304,7 @@ private fun TickerChip(
         // silently falls back to a placeholder is worse than no price: you cannot tell
         // "unchanged" from "the bridge has been down since lunch".
         if (changePercent != null) {
-            Text(
-                text = StoryPresentation.changeLabel(changePercent),
-                style = MaterialTheme.typography.labelSmall,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.SemiBold,
-                color = if (changePercent < 0) QuoteDown else QuoteUp,
-                maxLines = 1,
-            )
+            Delta(changePercent, style = NumStyle.copy(fontSize = 11.sp), decimals = 1)
         }
     }
 }
@@ -331,9 +343,8 @@ fun FilingRow(
         ) {
             Text(
                 text = symbol ?: "—",
-                style = MaterialTheme.typography.labelSmall,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.SemiBold,
+                style = NumStyle.copy(fontSize = 11.5.sp),
+                fontWeight = FontWeight.Bold,
                 color = if (followed) {
                     MaterialTheme.colorScheme.primary
                 } else {
@@ -344,7 +355,7 @@ fun FilingRow(
                 // Fixed, so the subjects line up into a readable second column. A symbol
                 // long enough to overflow it is rarer than a ragged column is annoying.
                 modifier = Modifier
-                    .width(84.dp)
+                    .width(92.dp)
                     .clip(RoundedCornerShape(6.dp))
                     .background(
                         if (followed) {
@@ -369,8 +380,7 @@ fun FilingRow(
             )
             Text(
                 text = RelativeTime.format(article.publishedAt, nowMillis),
-                style = MaterialTheme.typography.labelSmall,
-                fontFamily = FontFamily.Monospace,
+                style = NumStyle.copy(fontSize = 11.sp),
                 color = Chalk500,
                 maxLines = 1,
             )
@@ -543,24 +553,14 @@ private fun SwipeBackground(direction: SwipeToDismissBoxValue, article: ArticleS
  */
 @Composable
 private fun ReactionLabel(reaction: Reaction) {
-    val rising = reaction.percent >= 0
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            text = StoryPresentation.changeLabel(reaction.percent),
-            style = MaterialTheme.typography.labelSmall,
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.SemiBold,
-            color = if (rising) QuoteUp else QuoteDown,
-            maxLines = 1,
-        )
-        Text(
+    Column(horizontalAlignment = Alignment.End) {
+        Delta(reaction.percent, decimals = 1)
+        Eyebrow(
             text = when (reaction.basis) {
-                ReactionBasis.PUBLICATION -> " since"
-                ReactionBasis.PREVIOUS_CLOSE -> " on close"
+                ReactionBasis.PUBLICATION -> "since"
+                ReactionBasis.PREVIOUS_CLOSE -> "on close"
             },
-            style = MaterialTheme.typography.labelSmall,
-            color = Chalk500,
-            maxLines = 1,
+            modifier = Modifier.padding(top = 2.dp),
         )
     }
 }
@@ -578,15 +578,14 @@ private fun VolumeBadge(ratio: Double?) {
     if (ratio == null || level == VolumeLevel.ORDINARY) return
     Text(
         text = VolumeProfile.label(ratio),
-        style = MaterialTheme.typography.labelSmall,
-        fontFamily = FontFamily.Monospace,
+        style = NumStyle.copy(fontSize = 11.sp),
         fontWeight = FontWeight.SemiBold,
         // Amber rather than the price colours: this is neither up nor down, and borrowing
         // green or red would suggest a direction the number does not carry.
         color = if (level == VolumeLevel.HEAVY) CatRegulatory else Chalk500,
         maxLines = 1,
         modifier = Modifier
-            .clip(RoundedCornerShape(7.dp))
+            .clip(RoundedCornerShape(6.dp))
             .background(
                 if (level == VolumeLevel.HEAVY) {
                     CatRegulatory.copy(alpha = 0.14f)
@@ -594,6 +593,6 @@ private fun VolumeBadge(ratio: Double?) {
                     MaterialTheme.colorScheme.surfaceVariant
                 }
             )
-            .padding(horizontal = 7.dp, vertical = 3.dp),
+            .padding(horizontal = 7.dp, vertical = 4.dp),
     )
 }

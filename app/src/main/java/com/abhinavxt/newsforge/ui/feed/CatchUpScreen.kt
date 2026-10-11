@@ -2,6 +2,7 @@
 
 package com.abhinavxt.newsforge.ui.feed
 
+import com.abhinavxt.newsforge.ui.theme.Mono
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -321,14 +322,14 @@ private fun StoryContext(
                         Text(
                             text = symbol,
                             style = MaterialTheme.typography.labelMedium,
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = Mono,
                             fontWeight = FontWeight.SemiBold,
                         )
                         if (change != null) {
                             Text(
                                 text = StoryPresentation.changeLabel(change),
                                 style = MaterialTheme.typography.labelMedium,
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = Mono,
                                 color = if (change < 0) QuoteDown else QuoteUp,
                             )
                         }

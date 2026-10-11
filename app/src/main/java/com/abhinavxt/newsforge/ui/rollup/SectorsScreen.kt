@@ -1,5 +1,16 @@
 package com.abhinavxt.newsforge.ui.rollup
 
+import com.abhinavxt.newsforge.ui.theme.Mono
+import com.abhinavxt.newsforge.ui.theme.NumStyle
+import com.abhinavxt.newsforge.ui.components.Delta
+import com.abhinavxt.newsforge.ui.components.Eyebrow
+import com.abhinavxt.newsforge.ui.components.IndexTag
+import com.abhinavxt.newsforge.ui.components.KeyValue
+import com.abhinavxt.newsforge.ui.components.Monogram
+import com.abhinavxt.newsforge.ui.components.cornerBrackets
+import androidx.compose.foundation.border
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -109,8 +120,9 @@ fun SectorsScreen(
             state.market?.let { market ->
                 item(key = "market") { MarketCard(market) }
             }
-            items(state.rollups, key = { it.sector.name }) { rollup ->
+            itemsIndexed(state.rollups, key = { _, it -> it.sector.name }) { index, rollup ->
                 SectorRow(
+                    rank = index + 1,
                     rollup = rollup,
                     market = state.market,
                     heat = (rollup.heat / hottest).toFloat().coerceIn(0f, 1f),
@@ -128,95 +140,111 @@ fun SectorsScreen(
  */
 @Composable
 private fun MarketCard(market: MarketBreadth) {
-    NfCard(color = MaterialTheme.colorScheme.surfaceVariant) {
+    val tone = moveColor(market.medianChangePercent)
+    NfCard(accent = tone) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(
-                    text = "MARKET · ${market.index}",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = Chalk500,
-                )
+                Eyebrow("Market · ${market.index}")
                 Text(
                     text = market.formattedMedian(),
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = moveColor(market.medianChangePercent),
-                    modifier = Modifier.padding(top = 2.dp),
+                    style = MaterialTheme.typography.headlineSmall.copy(fontSize = 30.sp, lineHeight = 34.sp),
+                    fontWeight = FontWeight.Bold,
+                    color = tone,
+                    modifier = Modifier.padding(top = 4.dp),
                 )
+                Eyebrow("median move", modifier = Modifier.padding(top = 2.dp))
             }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = "${market.advances} up",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = QuoteUp,
-                )
-                Text(
-                    text = "${market.declines} down",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = QuoteDown,
-                )
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("▲ ${market.advances}", style = NumStyle, fontWeight = FontWeight.SemiBold, color = QuoteUp)
+                Text("■ ${market.unchanged}", style = NumStyle, color = Chalk500)
+                Text("▼ ${market.declines}", style = NumStyle, fontWeight = FontWeight.SemiBold, color = QuoteDown)
             }
         }
         val total = market.total.coerceAtLeast(1)
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(top = 12.dp)
-                .height(6.dp)
-                .clip(RoundedCornerShape(3.dp)),
+                .padding(top = 14.dp)
+                .height(8.dp),
             horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             if (market.advances > 0) {
-                Box(Modifier.weight(market.advances.toFloat() / total).fillMaxHeight().background(QuoteUp))
+                Box(Modifier.weight(market.advances.toFloat() / total).fillMaxHeight().clip(RoundedCornerShape(3.dp)).background(QuoteUp))
             }
             if (market.unchanged > 0) {
-                Box(Modifier.weight(market.unchanged.toFloat() / total).fillMaxHeight().background(Chalk500))
+                Box(Modifier.weight(market.unchanged.toFloat() / total).fillMaxHeight().clip(RoundedCornerShape(3.dp)).background(Chalk500))
             }
             if (market.declines > 0) {
-                Box(Modifier.weight(market.declines.toFloat() / total).fillMaxHeight().background(QuoteDown))
+                Box(Modifier.weight(market.declines.toFloat() / total).fillMaxHeight().clip(RoundedCornerShape(3.dp)).background(QuoteDown))
             }
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
+            Eyebrow("Breadth", modifier = Modifier.weight(1f))
+            Text("${market.total} names", style = NumStyle.copy(fontSize = 11.sp), color = Chalk500)
         }
     }
 }
 
+/**
+ * One sector, ranked by how loud it is in the news — OrderBlock's board row: a monogram
+ * and a rank tag up top, the move beside the name, then the evidence. The loudest one is
+ * bracketed, because it is the one to read first.
+ */
 @Composable
 private fun SectorRow(
+    rank: Int,
     rollup: SectorRollup,
     market: MarketBreadth?,
     heat: Float,
     onClick: () -> Unit,
     onOpenSymbol: (String) -> Unit,
 ) {
-    NfCard(onClick = onClick, contentPadding = PaddingValues(14.dp)) {
+    val tone = rollup.breadth?.let { moveColor(it.medianChangePercent) } ?: Chalk500
+    val first = rank == 1
+    NfCard(
+        modifier = if (first) Modifier.padding(4.dp).cornerBrackets(MaterialTheme.colorScheme.primary) else Modifier,
+        onClick = onClick,
+        contentPadding = PaddingValues(14.dp),
+        accent = if (first) MaterialTheme.colorScheme.primary else null,
+    ) {
         Row(
             Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(
-                text = rollup.sector.label,
-                style = MaterialTheme.typography.titleSmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-            // Exposure marked, not sorted on. A sector you hold does not become the day's
-            // story because you hold it.
-            if (rollup.watchlisted) Pill("Watchlist", MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.weight(1f))
-            rollup.breadth?.let { breadth ->
-                ChangePill(breadth.medianChangePercent)
+            Monogram(rollup.sector.label, tone, size = 32.dp)
+            Column(Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        text = rollup.sector.label,
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    // Exposure marked, not sorted on. A sector you hold does not become
+                    // the day's story because you hold it.
+                    if (rollup.watchlisted) Pill("Watchlist", MaterialTheme.colorScheme.primary)
+                }
+                rollup.breadth?.let { breadth ->
+                    Delta(breadth.medianChangePercent, Modifier.padding(top = 2.dp))
+                }
             }
+            IndexTag(rank, color = if (first) MaterialTheme.colorScheme.primary else Chalk500)
         }
 
         // News heat: how much is being written, as a bar. Kept apart from the move above
         // on purpose — loud in the news and flat on the tape is a different morning from
         // quiet and up two per cent.
         Row(
-            Modifier.fillMaxWidth().padding(top = 10.dp),
+            Modifier.fillMaxWidth().padding(top = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            Eyebrow("Heat")
             Box(
                 Modifier
                     .weight(1f)
@@ -234,34 +262,24 @@ private fun SectorRow(
             }
             Text(
                 text = "${rollup.stories} " + if (rollup.stories == 1) "story" else "stories",
-                style = MaterialTheme.typography.labelSmall,
-                fontFamily = FontFamily.Monospace,
+                style = NumStyle.copy(fontSize = 11.sp),
                 color = Chalk500,
             )
         }
 
-        val detail = buildString {
-            rollup.breadth?.let { breadth ->
-                append(breadth.advances)
-                append(" up, ")
-                append(breadth.declines)
-                append(" down of ")
-                append(breadth.constituents)
-            }
-            // Against the market, because the sector figure alone cannot say whether the
-            // sector did anything: up 1.2% on a market up 1.1% is up nothing.
-            rollup.relativeMove(market)?.let { relative ->
-                if (isNotEmpty()) append(" · ")
-                append(String.format(Locale.US, "%+.1f", relative))
-                append(" pts vs market")
+        rollup.breadth?.let { breadth ->
+            Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                KeyValue("Up", "${breadth.advances}/${breadth.constituents}", Modifier.weight(1f), valueColor = QuoteUp)
+                KeyValue("Down", "${breadth.declines}/${breadth.constituents}", Modifier.weight(1f), valueColor = QuoteDown)
             }
         }
-        if (detail.isNotEmpty()) {
-            Text(
-                text = detail,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 6.dp),
+        // Against the market, because the sector figure alone cannot say whether the
+        // sector did anything: up 1.2% on a market up 1.1% is up nothing.
+        rollup.relativeMove(market)?.let { relative ->
+            KeyValue(
+                "vs market",
+                String.format(Locale.US, "%+.1f pts", relative),
+                valueColor = moveColor(relative),
             )
         }
 
@@ -286,13 +304,13 @@ private fun SectorRow(
                 for (symbol in rollup.symbols.take(4)) {
                     Text(
                         text = symbol,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.SemiBold,
+                        style = NumStyle.copy(fontSize = 11.5.sp),
+                        fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier
-                            .clip(RoundedCornerShape(7.dp))
+                            .clip(RoundedCornerShape(6.dp))
                             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), RoundedCornerShape(6.dp))
                             .clickable { onOpenSymbol(symbol) }
                             .padding(horizontal = 8.dp, vertical = 4.dp),
                     )

@@ -2,7 +2,10 @@
 
 package com.abhinavxt.newsforge.ui.calendar
 
+import com.abhinavxt.newsforge.ui.theme.EyebrowStyle
+import com.abhinavxt.newsforge.ui.theme.Mono
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -151,20 +154,25 @@ private fun EventRow(
                 Modifier
                     .width(48.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(event.type.accent.copy(alpha = 0.14f))
+                    .background(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            listOf(event.type.accent.copy(alpha = 0.24f), event.type.accent.copy(alpha = 0.08f))
+                        )
+                    )
+                    .border(1.dp, event.type.accent.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
                     .padding(vertical = 6.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
                     text = date.format(MONTH).uppercase(),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
+                    style = EyebrowStyle,
                     color = event.type.accent,
                 )
                 Text(
-                    text = date.dayOfMonth.toString(),
+                    text = date.dayOfMonth.toString().padStart(2, '0'),
                     style = MaterialTheme.typography.titleLarge,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = Mono,
+                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
             }
@@ -176,7 +184,8 @@ private fun EventRow(
                     Text(
                         text = event.symbol,
                         style = MaterialTheme.typography.titleSmall,
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = Mono,
+                        fontWeight = FontWeight.Bold,
                         color = if (tier != null) {
                             MaterialTheme.colorScheme.primary
                         } else {

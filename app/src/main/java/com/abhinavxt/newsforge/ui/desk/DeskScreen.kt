@@ -2,6 +2,14 @@
 
 package com.abhinavxt.newsforge.ui.desk
 
+import com.abhinavxt.newsforge.ui.theme.Mono
+import com.abhinavxt.newsforge.ui.theme.NumStyle
+import com.abhinavxt.newsforge.ui.components.ControlShape
+import com.abhinavxt.newsforge.ui.components.Eyebrow
+import com.abhinavxt.newsforge.ui.components.IndexTag
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.background
@@ -198,23 +206,19 @@ fun DeskScreen(
                             // line of JSON would be worse than not sending it.
                             NfCard(contentPadding = PaddingValues(12.dp)) {
                                 Row(
-                                    Modifier.fillMaxWidth().padding(start = 2.dp, bottom = 8.dp),
+                                    Modifier.fillMaxWidth().padding(start = 2.dp, bottom = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 ) {
-                                    Text(
-                                        text = "QUOTES · ${quotes.size}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Chalk500,
-                                        modifier = Modifier.weight(1f),
-                                    )
+                                    Eyebrow("Quotes")
+                                    IndexTag(quotes.size)
+                                    Spacer(Modifier.weight(1f))
                                     Text(
                                         text = RelativeTime.format(
                                             message.receivedAtMillis,
                                             state.nowMillis,
                                         ),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontFamily = FontFamily.Monospace,
+                                        style = NumStyle.copy(fontSize = 11.sp),
                                         color = Chalk500,
                                     )
                                 }
@@ -222,17 +226,11 @@ fun DeskScreen(
                                 // would otherwise turn one message into a screenful and
                                 // bury the strategy signals this log exists for.
                                 for (quote in quotes.take(QUOTE_PREVIEW)) {
-                                    Text(
-                                        text = quote.symbol,
-                                        style = MaterialTheme.typography.labelLarge,
-                                        fontFamily = FontFamily.Monospace,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.padding(start = 2.dp, bottom = 6.dp),
-                                    )
                                     QuotePanel(
                                         quote,
                                         state.nowMillis,
-                                        Modifier.padding(bottom = 10.dp),
+                                        Modifier.padding(bottom = 8.dp),
+                                        showSymbol = true,
                                     )
                                 }
                                 if (quotes.size > QUOTE_PREVIEW) {
@@ -266,9 +264,10 @@ fun DeskScreen(
 @Composable
 private fun MessageRow(message: DeskMessage, nowMillis: Long, onClick: () -> Unit) {
     NfCard(
+        rail = if (message.isHighPriority) CatRegulatory else null,
         onClick = if (message.clickUrl != null) onClick else null,
         border = if (message.isHighPriority) CatRegulatory.copy(alpha = 0.45f) else Hairline,
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -277,8 +276,7 @@ private fun MessageRow(message: DeskMessage, nowMillis: Long, onClick: () -> Uni
             if (message.isHighPriority) Pill("Priority", CatRegulatory, dot = true)
             Text(
                 text = RelativeTime.format(message.receivedAtMillis, nowMillis),
-                style = MaterialTheme.typography.labelSmall,
-                fontFamily = FontFamily.Monospace,
+                style = NumStyle.copy(fontSize = 11.sp),
                 color = Chalk500,
                 modifier = Modifier.weight(1f),
             )
@@ -392,22 +390,25 @@ private fun CommandBar(
                 modifier = Modifier.weight(1f),
                 singleLine = true,
                 enabled = !sending,
-                shape = RoundedCornerShape(24.dp),
+                shape = ControlShape,
                 placeholder = {
                     Text(
                         "/help",
                         style = MaterialTheme.typography.bodyMedium,
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = Mono,
                     )
                 },
                 textStyle = MaterialTheme.typography.bodyMedium.copy(
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = Mono,
                 ),
                 colors = OutlinedTextFieldDefaults.colors(
+                    // OrderBlock's inputs: filled and borderless until focused.
                     focusedContainerColor = MaterialTheme.colorScheme.surface,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                    disabledContainerColor = MaterialTheme.colorScheme.surface,
-                    unfocusedBorderColor = Hairline,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    unfocusedBorderColor = Color.Transparent,
+                    disabledBorderColor = Color.Transparent,
+                    focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
                 ),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { onSend() }),

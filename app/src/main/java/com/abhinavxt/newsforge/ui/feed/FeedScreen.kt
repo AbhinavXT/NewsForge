@@ -5,6 +5,8 @@
 
 package com.abhinavxt.newsforge.ui.feed
 
+import com.abhinavxt.newsforge.ui.theme.EyebrowStyle
+import com.abhinavxt.newsforge.ui.theme.Mono
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.animation.AnimatedVisibility
@@ -645,7 +647,7 @@ private fun BriefHeader(brief: Brief, nowMillis: Long, unread: Int, onCatchUp: (
             Text(
                 text = brief.totalStories.toString(),
                 style = MaterialTheme.typography.headlineMedium,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = Mono,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
@@ -726,7 +728,7 @@ private fun BriefTape(sections: List<BriefSection>) {
                 Text(
                     text = section.totalCount.toString(),
                     style = MaterialTheme.typography.labelMedium,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = Mono,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
             }
@@ -769,7 +771,7 @@ private fun ActiveFilterBanner(
         Column(Modifier.weight(1f)) {
             Text(
                 text = kind.uppercase(),
-                style = MaterialTheme.typography.labelSmall,
+                style = EyebrowStyle,
                 color = Chalk500,
             )
             Text(
@@ -892,7 +894,7 @@ private fun CompanyRow(entry: SymbolEntry, onClick: () -> Unit) {
             Text(
                 text = entry.symbol.take(2),
                 style = MaterialTheme.typography.labelMedium,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = Mono,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -901,7 +903,7 @@ private fun CompanyRow(entry: SymbolEntry, onClick: () -> Unit) {
             Text(
                 text = entry.symbol,
                 style = MaterialTheme.typography.titleSmall,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = Mono,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(

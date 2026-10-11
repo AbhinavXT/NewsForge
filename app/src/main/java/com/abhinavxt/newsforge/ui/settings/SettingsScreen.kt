@@ -5,6 +5,7 @@
 
 package com.abhinavxt.newsforge.ui.settings
 
+import com.abhinavxt.newsforge.ui.theme.Mono
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
@@ -629,9 +630,9 @@ private fun SettingsField(
         onValueChange = onValueChange,
         label = { Text(label) },
         singleLine = true,
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(9.dp),
         textStyle = MaterialTheme.typography.bodyMedium.let {
-            if (monospace) it.copy(fontFamily = FontFamily.Monospace) else it
+            if (monospace) it.copy(fontFamily = Mono) else it
         },
         supportingText = supporting?.let {
             { Text(it, style = MaterialTheme.typography.labelSmall) }
@@ -639,10 +640,12 @@ private fun SettingsField(
         visualTransformation = visualTransformation,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         trailingIcon = trailing,
+        // OrderBlock's inputs: filled and borderless until focused.
         colors = OutlinedTextFieldDefaults.colors(
             focusedContainerColor = MaterialTheme.colorScheme.background,
-            unfocusedContainerColor = MaterialTheme.colorScheme.background,
-            unfocusedBorderColor = Hairline,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+            unfocusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
+            focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
         ),
         modifier = modifier.fillMaxWidth().padding(top = 8.dp),
     )

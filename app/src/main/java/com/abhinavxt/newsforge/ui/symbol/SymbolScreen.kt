@@ -5,6 +5,16 @@
 
 package com.abhinavxt.newsforge.ui.symbol
 
+import com.abhinavxt.newsforge.ui.theme.EyebrowStyle
+import com.abhinavxt.newsforge.ui.theme.Mono
+import com.abhinavxt.newsforge.ui.theme.NumStyle
+import com.abhinavxt.newsforge.ui.components.Eyebrow
+import com.abhinavxt.newsforge.ui.components.Delta
+import androidx.compose.ui.unit.sp
+import com.abhinavxt.newsforge.ui.components.IconBadge
+import com.abhinavxt.newsforge.ui.components.Monogram
+import com.abhinavxt.newsforge.ui.components.leftRail
+import com.abhinavxt.newsforge.ui.components.moveColor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
@@ -101,6 +111,14 @@ fun SymbolScreen(
                 title = state.symbol,
                 subtitle = state.summary?.let { "${it.storyCount} stories stored" },
                 onBack = onBack,
+                badge = {
+                    Monogram(
+                        text = state.symbol,
+                        color = state.quote?.changePercent?.let { moveColor(it) }
+                            ?: MaterialTheme.colorScheme.primary,
+                        size = 38.dp,
+                    )
+                },
             )
         },
     ) { padding ->
@@ -225,34 +243,26 @@ private fun Header(
                     .fillMaxWidth()
                     .padding(bottom = 12.dp)
                     .clip(MaterialTheme.shapes.small)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f))
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
+                    .leftRail(MaterialTheme.colorScheme.primary)
+                    .padding(start = 14.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_calendar),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp),
-                )
+                IconBadge(R.drawable.ic_calendar, MaterialTheme.colorScheme.primary, size = 30.dp)
                 Column(Modifier.weight(1f)) {
-                    Text(
-                        text = event.type.label.uppercase(),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
+                    Eyebrow(event.type.label, color = MaterialTheme.colorScheme.primary)
                     Text(
                         text = event.title,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(top = 2.dp),
                     )
                 }
                 Text(
                     text = RelativeTime.dayLabel(event.dateMillis, state.nowMillis),
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
+                    style = NumStyle,
+                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
@@ -328,8 +338,7 @@ private fun Header(
 private fun HeaderLabel(text: String) {
     Text(
         text = text.uppercase(),
-        style = MaterialTheme.typography.labelSmall,
-        fontWeight = FontWeight.Bold,
+        style = EyebrowStyle,
         color = Chalk500,
         modifier = Modifier.padding(top = 12.dp, bottom = 6.dp),
     )
@@ -475,26 +484,19 @@ private fun PriceHeader(price: PriceSummary?, nowMillis: Long) {
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
                 text = "₹${formatPrice(price.last)}",
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.headlineSmall.copy(fontSize = 30.sp, lineHeight = 34.sp),
+                fontWeight = FontWeight.Bold,
             )
             Spacer(Modifier.width(10.dp))
             price.changePercent?.let { percent ->
-                Text(
-                    text = String.format(
-                        java.util.Locale.US,
-                        "%+.2f (%+.2f%%)",
-                        price.change ?: 0.0,
-                        percent,
-                    ),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = tint,
-                    modifier = Modifier
-                        .padding(bottom = 4.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(tint.copy(alpha = 0.14f))
-                        .padding(horizontal = 8.dp, vertical = 3.dp),
-                )
+                Column(Modifier.padding(bottom = 3.dp)) {
+                    Delta(percent, style = NumStyle.copy(fontSize = 14.sp))
+                    Text(
+                        text = String.format(java.util.Locale.US, "%+.2f", price.change ?: 0.0),
+                        style = NumStyle.copy(fontSize = 11.sp),
+                        color = tint,
+                    )
+                }
             }
         }
 
@@ -511,9 +513,9 @@ private fun PriceHeader(price: PriceSummary?, nowMillis: Long) {
                 PriceSummary.Source.LAST_CLOSE ->
                     "Last close · ${RelativeTime.dayLabel(price.asOfMillis ?: nowMillis, nowMillis)}"
             },
-            style = MaterialTheme.typography.labelSmall,
+            style = NumStyle.copy(fontSize = 11.sp),
             color = Chalk500,
-            modifier = Modifier.padding(top = 2.dp),
+            modifier = Modifier.padding(top = 4.dp),
         )
 
         val cells = buildList {
@@ -531,17 +533,12 @@ private fun PriceHeader(price: PriceSummary?, nowMillis: Long) {
                 Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
                     for (cell in row) {
                         Column(Modifier.weight(1f)) {
-                            Text(
-                                text = cell.first,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Chalk500,
-                            )
+                            Eyebrow(cell.first)
                             Text(
                                 text = cell.second,
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontFeatureSettings = "tnum",
-                                ),
-                                fontWeight = FontWeight.Medium,
+                                style = NumStyle.copy(fontSize = 13.5.sp),
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(top = 3.dp),
                             )
                         }
                     }
@@ -654,7 +651,7 @@ private fun EventStudyLine(study: EventStudyResult) {
         Text(
             text = signed(outcome.percent),
             style = MaterialTheme.typography.labelMedium,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = Mono,
             fontWeight = FontWeight.SemiBold,
             color = if (outcome.percent >= 0) QuoteUp else QuoteDown,
         )

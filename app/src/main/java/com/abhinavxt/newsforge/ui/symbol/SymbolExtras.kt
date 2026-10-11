@@ -1,5 +1,7 @@
 package com.abhinavxt.newsforge.ui.symbol
 
+import com.abhinavxt.newsforge.ui.theme.EyebrowStyle
+import com.abhinavxt.newsforge.ui.theme.Mono
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -117,7 +119,7 @@ private fun Legend(symbol: String, percent: Double?, color: Color) {
         Text(
             text = symbol,
             style = MaterialTheme.typography.labelMedium,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = Mono,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
         )
@@ -125,7 +127,7 @@ private fun Legend(symbol: String, percent: Double?, color: Color) {
             Text(
                 text = StoryPresentation.changeLabel(it),
                 style = MaterialTheme.typography.labelMedium,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = Mono,
                 color = if (it < 0) QuoteDown else QuoteUp,
             )
         }
@@ -168,7 +170,7 @@ private fun ComparePicker(
                         Text(
                             text = entry.symbol,
                             style = MaterialTheme.typography.titleSmall,
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = Mono,
                         )
                         Text(
                             text = entry.name,
@@ -387,8 +389,7 @@ fun ResultsHistoryCard(events: List<ResultsEvent>) {
 private fun ColumnHeading(text: String) {
     Text(
         text = text.uppercase(),
-        style = MaterialTheme.typography.labelSmall,
-        fontWeight = FontWeight.Bold,
+        style = EyebrowStyle,
         color = Chalk500,
         modifier = Modifier.width(MOVE_CELL),
         textAlign = androidx.compose.ui.text.style.TextAlign.End,
@@ -400,7 +401,7 @@ private fun MoveCell(percent: Double?) {
     Text(
         text = percent?.let { StoryPresentation.changeLabel(it) } ?: "—",
         style = MaterialTheme.typography.labelMedium,
-        fontFamily = FontFamily.Monospace,
+        fontFamily = Mono,
         fontWeight = FontWeight.SemiBold,
         color = when {
             percent == null -> Chalk500
@@ -416,8 +417,7 @@ private fun MoveCell(percent: Double?) {
 private fun CardLabel(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text.uppercase(),
-        style = MaterialTheme.typography.labelSmall,
-        fontWeight = FontWeight.Bold,
+        style = EyebrowStyle,
         color = Chalk500,
         modifier = modifier,
     )
